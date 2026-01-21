@@ -39,6 +39,11 @@ def load_records(api_url):
         logging.error(f"Не удалось загрузить данные: {e}")
         return []
 
+
+# Загрузка Заголовка
+API_URL_INFO = f"https://sheets.googleapis.com/v4/spreadsheets/{SPREADSHEET_ID}/values/Администраторы!B1:Z1?key={API_KEY}"
+info_records = load_records(API_URL_INFO)
+
 # Загрузка данных для Администраторов
 API_URL_ADMIN = f"https://sheets.googleapis.com/v4/spreadsheets/{SPREADSHEET_ID}/values/Администраторы!A2:Z1000?key={API_KEY}"
 
@@ -85,7 +90,9 @@ async def enter_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
             records = get_records_by_role(role)
             data = get_employee_data(employee_id, records)
             if data:
-                text = f'''*ФИО:* {data['fio']}
+                text = f'''*{info_records[0] if info_records else ''}*
+
+*ФИО:* {data['fio']}
 *ПВЗ:* {data['pvz']}
 
 *Факт часов:* {data['fact']}
@@ -116,7 +123,9 @@ async def enter_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
             data = get_employee_data(employee_id, records)
             logging.info(f"Найдены данные для МФУ: {data is not None}")
             if data:
-                text = f'''*ФИО:* {data['fio']}
+                text = f'''*{info_records[0] if info_records else ''}*
+
+*ФИО:* {data['fio']}
 *ПВЗ:* {data['pvz']}
 
 *Факт часов:* {data['fact']}
@@ -179,5 +188,6 @@ if __name__ == '__main__':
     )
 
     application.add_handler(conv_handler)
+
 
     application.run_polling()
