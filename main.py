@@ -39,6 +39,9 @@ def load_sheet_values(api_url: str):
         response.raise_for_status()
         data = response.json()
         return data.get("values", [])
+    except requests.exceptions.HTTPError as e:
+        logging.error(f"HTTP ошибка {e.response.status_code}: {e.response.text}")
+        return []
     except Exception as e:
         logging.error(f"Ошибка загрузки {api_url}: {e}")
         return []
@@ -47,10 +50,19 @@ def load_sheet_values(api_url: str):
 def load_records(api_url: str):
     values = load_sheet_values(api_url)
     if not values:
+        logging.warning("Таблица пуста!")
         return []
 
     headers = values[0]
-    records = [dict(zip(headers, row)) for row in values[1:]]
+    logging.debug(f"Headers: {headers}")
+    records = []
+    for i, row in enumerate(values[1:], 1):
+        record = dict(zip(headers, row))
+        records.append(record)
+        if i <= 2:  # Логируем первые 2 строки для дебага
+            logging.debug(f"Row {i}: {record}")
+    
+    logging.info(f"Загружено {len(records)} записей из таблицы")
     return records
 
 
@@ -65,7 +77,9 @@ def get_registry_ids(registry_spreadsheet_id: str):
         f"/values/A2:A200?key={API_KEY}"
     )
 
+    logging.info(f"Запрос к API: {api_url[:100]}...")
     values = load_sheet_values(api_url)
+    logging.info(f"Полученные значения: {values}")
 
     ids = []
     for row in values:
@@ -73,6 +87,8 @@ def get_registry_ids(registry_spreadsheet_id: str):
             ids.append(row[0].strip())
 
     logging.info(f"Загружено {len(ids)} spreadsheet_id из реестра")
+    if not ids:
+        logging.warning("⚠️ ВНИМАНИЕ: Реестр пустой! Проверьте REGISTRY_SPREADSHEET_ID и доступ к Google Sheets")
     return ids
 
 
@@ -93,11 +109,16 @@ def build_role_url(spreadsheet_id: str, role: str):
 
 def get_employee_data(employee_id, records):
     if not records:
+        logging.warning(f"Records пусто для поиска {employee_id}")
         return None
 
+    for i, row in enumerate(records[:3]):  # Логируем первые 3 строки
+        logging.debug(f"Проверяем row {i}: keys={list(row.keys())}")
+    
     for row in records:
         table_id = str(row.get("Табельный номер", "")).replace(",", "")
         if table_id == employee_id:
+            logging.info(f"✅ Найдена инф. для сотрудника {employee_id}")
             return {
                 "fio": row.get("ФИО", "N/A"),
                 "pvz": row.get("ПВЗ", "N/A"),
@@ -117,22 +138,35 @@ def find_employee_across_sheets(employee_id: str, role: str):
     Один loop по территориям.
     Внутри выбирается нужный лист по роли.
     """
-    for spreadsheet_id in SHEET_IDS:
+    logging.info(f"Начинаем поиск {employee_id} в роли {role}. SHEET_IDS={SHEET_IDS}")
+    
+    if not SHEET_IDS:
+        logging.error("❌ SHEET_IDS пустой! Реестр не загружена")
+        return None
+    
+    for idx, spreadsheet_id in enumerate(SHEET_IDS, 1):
         try:
             api_url = build_role_url(spreadsheet_id, role)
-            logging.info(f"Проверяем таблицу {spreadsheet_id} ({role})")
+            logging.info(f"[{idx}/{len(SHEET_IDS)}] Проверяем таблицу {spreadsheet_id[:20]}... ({role})")
 
             records = load_records(api_url)
+            if not records:
+                logging.warning(f"  Таблица {spreadsheet_id[:20]}... пустая")
+                continue
+            
             data = get_employee_data(employee_id, records)
 
             if data:
-                logging.info(f"Найден сотрудник в {spreadsheet_id}")
+                logging.info(f"🎉 Найден сотрудник в {spreadsheet_id[:20]}...")
                 return data  # ✅ BREAK
+            else:
+                logging.debug(f"  {employee_id} не найдена в этой таблице")
 
         except Exception as e:
-            logging.error(f"Ошибка при проверке {spreadsheet_id}: {e}")
+            logging.error(f"Ошибка при проверке {spreadsheet_id}: {e}", exc_info=True)
             continue
 
+    logging.warning(f"❌ {employee_id} не найдена ни в одной таблице")
     return None
 
 
