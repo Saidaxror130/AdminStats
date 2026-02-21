@@ -1,98 +1,184 @@
 import logging
 import requests
-import json
 import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler, CallbackQueryHandler
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    MessageHandler,
+    filters,
+    ContextTypes,
+    ConversationHandler,
+    CallbackQueryHandler,
+)
 
-# Настройка логирования
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+# ================= LOGGING =================
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO,
+)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
-# Токен бота - читается из переменной окружения
-TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+# ================= ENV =================
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+API_KEY = os.getenv("GOOGLE_API_KEY")
+REGISTRY_ID = os.getenv("REGISTRY_SPREADSHEET_ID")
+
 if not TOKEN:
-    raise ValueError('TELEGRAM_BOT_TOKEN не установлен. Добавьте TELEGRAM_BOT_TOKEN в .env файл.')
-
-# Настройка Google Sheets API - читается из переменной окружения
-SPREADSHEET_ID = os.getenv('SPREADSHEET_ID')
-API_KEY = os.getenv('GOOGLE_API_KEY')
-if not SPREADSHEET_ID:
-    raise ValueError('SPREADSHEET_ID не установлен. Добавьте SPREADSHEET_ID в .env файл.')
+    raise ValueError("TELEGRAM_BOT_TOKEN не установлен")
 if not API_KEY:
-    raise ValueError('GOOGLE_API_KEY не установлен. Добавьте GOOGLE_API_KEY в .env файл.')
+    raise ValueError("GOOGLE_API_KEY не установлен")
+if not REGISTRY_ID:
+    raise ValueError("REGISTRY_SPREADSHEET_ID не установлен")
 
-def load_records(api_url):
+# ================= HELPERS =================
+
+def load_sheet_values(api_url: str):
     try:
-        response = requests.get(api_url)
+        response = requests.get(api_url, timeout=15)
         response.raise_for_status()
         data = response.json()
-        values = data.get('values', [])
-        if values:
-            headers = values[0]
-            records = [dict(zip(headers, row)) for row in values[1:]]
-            logging.info(f"Загружено {len(records)} записей из {api_url.split('values/')[1].split('!')[0]}.")
-            return records
-        else:
-            return []
+        return data.get("values", [])
     except Exception as e:
-        logging.error(f"Не удалось загрузить данные: {e}")
+        logging.error(f"Ошибка загрузки {api_url}: {e}")
         return []
 
 
-# Загрузка Заголовка
-API_URL_INFO = f"https://sheets.googleapis.com/v4/spreadsheets/{SPREADSHEET_ID}/values/Администраторы!B1:Z1?key={API_KEY}"
-info_records = load_records(API_URL_INFO)
+def load_records(api_url: str):
+    values = load_sheet_values(api_url)
+    if not values:
+        return []
 
-# Загрузка данных для Администраторов
-API_URL_ADMIN = f"https://sheets.googleapis.com/v4/spreadsheets/{SPREADSHEET_ID}/values/Администраторы!A2:Z1000?key={API_KEY}"
-
-# Загрузка данных для МФУ
-API_URL_MFU = f"https://sheets.googleapis.com/v4/spreadsheets/{SPREADSHEET_ID}/values/МФУ!A2:Z1000?key={API_KEY}"
-
-def get_records_by_role(role: str):
-    if role == "admin":
-        return load_records(API_URL_ADMIN)
-    elif role == "mfu":
-        return load_records(API_URL_MFU)
-    return []
+    headers = values[0]
+    records = [dict(zip(headers, row)) for row in values[1:]]
+    return records
 
 
-# Состояния разговора
+# ================= REGISTRY =================
+
+def get_registry_ids(registry_spreadsheet_id: str):
+    """
+    Читает таблицу-реестр и возвращает список spreadsheet_id из колонки A.
+    """
+    api_url = (
+        f"https://sheets.googleapis.com/v4/spreadsheets/{registry_spreadsheet_id}"
+        f"/values/A2:A200?key={API_KEY}"
+    )
+
+    values = load_sheet_values(api_url)
+
+    ids = []
+    for row in values:
+        if row and row[0]:
+            ids.append(row[0].strip())
+
+    logging.info(f"Загружено {len(ids)} spreadsheet_id из реестра")
+    return ids
+
+
+# Загружаем список территорий один раз
+SHEET_IDS = get_registry_ids(REGISTRY_ID)
+
+
+# ================= SEARCH =================
+
+def build_role_url(spreadsheet_id: str, role: str):
+    sheet_name = "Администраторы" if role == "admin" else "МФУ"
+
+    return (
+        f"https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}"
+        f"/values/{sheet_name}!A2:Z1000?key={API_KEY}"
+    )
+
+
+def get_employee_data(employee_id, records):
+    if not records:
+        return None
+
+    for row in records:
+        table_id = str(row.get("Табельный номер", "")).replace(",", "")
+        if table_id == employee_id:
+            return {
+                "fio": row.get("ФИО", "N/A"),
+                "pvz": row.get("ПВЗ", "N/A"),
+                "fact": row.get("Факт", "N/A"),
+                "open_limits": row.get("Открыто Лимитов", "N/A"),
+                "plan_limits": row.get("План по лимитам", "N/A"),
+                "execution": row.get("Выполнение плана по лимитам", "N/A"),
+                "virtual_cards": row.get(" 📱Оформленно виртуальных карт", "N/A"),
+                "plastic_cards": row.get("💷Оформленно пластиковых карт", "N/A"),
+                "vchl": row.get("ВЧЛ", "N/A"),
+            }
+    return None
+
+
+def find_employee_across_sheets(employee_id: str, role: str):
+    """
+    Один loop по территориям.
+    Внутри выбирается нужный лист по роли.
+    """
+    for spreadsheet_id in SHEET_IDS:
+        try:
+            api_url = build_role_url(spreadsheet_id, role)
+            logging.info(f"Проверяем таблицу {spreadsheet_id} ({role})")
+
+            records = load_records(api_url)
+            data = get_employee_data(employee_id, records)
+
+            if data:
+                logging.info(f"Найден сотрудник в {spreadsheet_id}")
+                return data  # ✅ BREAK
+
+        except Exception as e:
+            logging.error(f"Ошибка при проверке {spreadsheet_id}: {e}")
+            continue
+
+    return None
+
+
+# ================= STATES =================
 SELECT_ROLE, ENTER_ID = range(2)
+
+
+# ================= HANDLERS =================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [InlineKeyboardButton("Админ", callback_data="admin")],
-        [InlineKeyboardButton("МФУ (Менеджер финансовых услуг)", callback_data="mfu")]
+        [InlineKeyboardButton("МФУ (Менеджер финансовых услуг)", callback_data="mfu")],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
+
     await update.message.reply_text(
         "Привет! Я бот для просмотра показателей сотрудников.\n\nВыберите вашу должность:",
-        reply_markup=reply_markup
+        reply_markup=reply_markup,
     )
     return SELECT_ROLE
+
 
 async def select_role(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+
     role = query.data
-    context.user_data['role'] = role
+    context.user_data["role"] = role
+
     await query.edit_message_text("Введите табельный номер:")
     return ENTER_ID
 
+
 async def enter_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        employee_id = update.message.text.strip().replace(',', '')
-        role = context.user_data.get('role')
-        logging.info(f"Введен ID: {employee_id}, Роль: {role}")
-        if role == "admin":
-            records = get_records_by_role(role)
-            data = get_employee_data(employee_id, records)
-            if data:
-                text = f'''*{info_records[0] if info_records else ''}*
+        employee_id = update.message.text.strip().replace(",", "")
+        role = context.user_data.get("role")
 
-*ФИО:* {data['fio']}
+        logging.info(f"Поиск ID: {employee_id}, роль: {role}")
+
+        data = find_employee_across_sheets(employee_id, role)
+
+        if data:
+            if role == "admin":
+                text = f"""*ФИО:* {data['fio']}
 *ПВЗ:* {data['pvz']}
 
 *Факт часов:* {data['fact']}
@@ -106,26 +192,9 @@ async def enter_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 *ВЧЛ:* {data['vchl']}
 
-Выберите должность для нового поиска:'''
-                keyboard = [
-                    [InlineKeyboardButton("Админ", callback_data="admin")],
-                    [InlineKeyboardButton("МФУ (Менеджер финансовых услуг)", callback_data="mfu")]
-                ]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                await update.message.reply_text(text, parse_mode='Markdown', reply_markup=reply_markup)
-                return SELECT_ROLE
+Выберите должность для нового поиска:"""
             else:
-                text = 'Данные не найдены. Введите табельный номер:'
-                await update.message.reply_text(text, parse_mode='Markdown')
-                return ENTER_ID
-        elif role == "mfu":
-            records = get_records_by_role(role)
-            data = get_employee_data(employee_id, records)
-            logging.info(f"Найдены данные для МФУ: {data is not None}")
-            if data:
-                text = f'''*{info_records[0] if info_records else ''}*
-
-*ФИО:* {data['fio']}
+                text = f"""*ФИО:* {data['fio']}
 *ПВЗ:* {data['pvz']}
 
 *Факт часов:* {data['fact']}
@@ -135,59 +204,45 @@ async def enter_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 *ВЧЛ:* {data['vchl']}
 
-Выберите должность для нового поиска:'''
-                keyboard = [
-                    [InlineKeyboardButton("Админ", callback_data="admin")],
-                    [InlineKeyboardButton("МФУ (Менеджер финансовых услуг)", callback_data="mfu")]
-                ]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                await update.message.reply_text(text, parse_mode='Markdown', reply_markup=reply_markup)
-                return SELECT_ROLE
-            else:
-                text = 'Данные не найдены. Введите табельный номер:'
-                await update.message.reply_text(text, parse_mode='Markdown')
-                return ENTER_ID
+Выберите должность для нового поиска:"""
+
+            keyboard = [
+                [InlineKeyboardButton("Админ", callback_data="admin")],
+                [InlineKeyboardButton("МФУ (Менеджер финансовых услуг)", callback_data="mfu")],
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+
+            await update.message.reply_text(
+                text, parse_mode="Markdown", reply_markup=reply_markup
+            )
+            return SELECT_ROLE
+
         else:
-            text = "Ошибка роли."
-        await update.message.reply_text(text, parse_mode='Markdown')
-        return SELECT_ROLE
+            await update.message.reply_text(
+                "❌ Табельный номер не найден (Ошибка 404). Введите табельный номер:"
+            )
+            return ENTER_ID
+
     except Exception as e:
         logging.error(f"Ошибка в enter_id: {e}")
         await update.message.reply_text("Произошла ошибка. Попробуйте снова.")
         return SELECT_ROLE
 
-def get_employee_data(employee_id, records):
-    if not records:
-        return None
-    for row in records:
-        table_id = str(row.get('Табельный номер', '')).replace(',', '')
-        if table_id == employee_id:
-            return {
-                'fio': row.get('ФИО', 'N/A'),
-                'pvz': row.get('ПВЗ', 'N/A'),
-                'fact': row.get('Факт', 'N/A'),
-                'open_limits': row.get('Открыто Лимитов', 'N/A'),
-                'plan_limits': row.get('План по лимитам', 'N/A'),
-                'execution': row.get('Выполнение плана по лимитам', 'N/A'),
-                'virtual_cards': row.get(' 📱Оформленно виртуальных карт', 'N/A'),
-                'plastic_cards': row.get('💷Оформленно пластиковых карт', 'N/A'),
-                'vchl': row.get('ВЧЛ', 'N/A')
-            }
-    return None
 
-if __name__ == '__main__':
+# ================= MAIN =================
+
+if __name__ == "__main__":
     application = ApplicationBuilder().token(TOKEN).build()
 
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler('start', start)],
+        entry_points=[CommandHandler("start", start)],
         states={
             SELECT_ROLE: [CallbackQueryHandler(select_role)],
             ENTER_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_id)],
         },
-        fallbacks=[CommandHandler('start', start)],
+        fallbacks=[CommandHandler("start", start)],
     )
 
     application.add_handler(conv_handler)
-
 
     application.run_polling()
