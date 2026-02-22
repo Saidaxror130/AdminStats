@@ -74,7 +74,7 @@ def get_registry_ids(registry_spreadsheet_id: str):
     """
     api_url = (
         f"https://sheets.googleapis.com/v4/spreadsheets/{registry_spreadsheet_id}"
-        f"/values/A2:A200?key={API_KEY}"
+        f"/values/A2:A?key={API_KEY}"
     )
 
     logging.info(f"Запрос к API: {api_url[:100]}...")
