@@ -74,7 +74,7 @@ def get_registry_ids(registry_spreadsheet_id: str):
     """
     api_url = (
         f"https://sheets.googleapis.com/v4/spreadsheets/{registry_spreadsheet_id}"
-        f"/values/A2:A?key={API_KEY}"
+        f"/values/B2:A?key={API_KEY}"
     )
 
     logging.info(f"Запрос к API: {api_url[:100]}...")
@@ -103,7 +103,7 @@ def build_role_url(spreadsheet_id: str, role: str):
 
     return (
         f"https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}"
-        f"/values/{sheet_name}!A2:Z1000?key={API_KEY}"
+        f"/values/{sheet_name}!B2:Z1000?key={API_KEY}"
     )
 
 
