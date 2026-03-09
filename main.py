@@ -103,7 +103,7 @@ def build_role_url(spreadsheet_id: str, role: str):
 
     return (
         f"https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}"
-        f"/values/{sheet_name}!B2:Z1000?key={API_KEY}"
+        f"/values/{sheet_name}!A2:Z1000?key={API_KEY}"
     )
 
 
@@ -116,8 +116,9 @@ def get_employee_data(employee_id, records):
         logging.debug(f"Проверяем row {i}: keys={list(row.keys())}")
     
     for row in records:
-        table_id = str(row.get("Табельный номер", "")).replace(",", "").replace(" ", "")
+        table_id = str(row.get("Табельный номер", "")).replace(",", "").replace(" ", "").strip()
         employee_id = employee_id.replace(" ", "")
+
         if table_id == employee_id:
             logging.info(f"✅ Найдена инф. для сотрудника {employee_id}")
             return {
