@@ -77,8 +77,6 @@ def load_records(api_url: str):
         record = dict(zip(headers, row))
         records.append(record)
 
-    logging.info(f"Загружено {len(records)} записей из таблицы")
-
     return records
 
 # ================= REGISTRY =================
@@ -131,7 +129,7 @@ def get_employee_data(employee_id, records):
 
         if table_id == employee_id:
 
-            logging.info(f"Найден сотрудник {employee_id}")
+            logging.info(f"🎉Успешно найден сотрудник {employee_id} в таблице, {row.get('ПВЗ', 'N/A')} ({row.get('ФИО', 'N/A')}) ")
 
             return {
                 "fio": row.get("ФИО", "N/A"),
@@ -150,7 +148,7 @@ def get_employee_data(employee_id, records):
 
 def find_employee_across_sheets(employee_id: str, role: str):
 
-    logging.info(f"Начинаем поиск {employee_id} роль={role}")
+    logging.info(f"🔍Начинаем поиск {employee_id} роль: {role}")
 
     if not SHEET_IDS:
         logging.error("Реестр таблиц пустой")
@@ -175,7 +173,7 @@ def find_employee_across_sheets(employee_id: str, role: str):
         except Exception as e:
             logging.error(f"Ошибка проверки таблицы {spreadsheet_id}: {e}")
 
-    logging.warning(f"{employee_id} не найден ни в одной таблице")
+    logging.warning(f"{employee_id} не найден ни в одной таблице❌")
 
     return None
 
@@ -239,8 +237,8 @@ async def enter_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
 *План по лимитам:* {data['plan_limits']}
 *Выполнение плана:* {data['execution']}
 
-*Оформленные виртуальные карты:* {data['virtual_cards']}
-*Оформленные пластиковые карты:* {data['plastic_cards']}
+*Оформленные ВИРТУАЛЬНЫЕ карты:* {data['virtual_cards']}
+*Оформленные ПЛАСТИКОВЫЕ карты:* {data['plastic_cards']}
 
 *ВЧЛ:* {data['vchl']}
 
@@ -253,8 +251,8 @@ async def enter_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 *Факт часов:* {data['fact']}
 
-*Оформленные виртуальные карты:* {data['virtual_cards']}
-*Оформленные пластиковые карты:* {data['plastic_cards']}
+*Оформленные ВИРТУАЛЬНЫЕ карты:* {data['virtual_cards']}
+*Оформленные ПЛАСТИКОВЫЕ карты:* {data['plastic_cards']}
 
 *ВЧЛ:* {data['vchl']}
 
@@ -276,7 +274,7 @@ async def enter_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
 
             await update.message.reply_text(
-                "❌ Табельный номер не найден (Ошибка 404). Введите табельный номер:"
+                "❌ Табельный номер не найден. \n\nВведите табельный номер:"
             )
 
             return ENTER_ID
@@ -285,7 +283,7 @@ async def enter_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         logging.error(f"Ошибка в enter_id: {e}")
 
-        await update.message.reply_text("Произошла ошибка. Попробуйте снова.")
+        await update.message.reply_text("Произошла ошибка!. Попробуйте снова.\n\n /start")
 
         return SELECT_ROLE
 
