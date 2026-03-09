@@ -74,7 +74,7 @@ def get_registry_ids(registry_spreadsheet_id: str):
     """
     api_url = (
         f"https://sheets.googleapis.com/v4/spreadsheets/{registry_spreadsheet_id}"
-        f"/values/B2:A?key={API_KEY}"
+        f"/values/A2:A?key={API_KEY}"
     )
 
     logging.info(f"Запрос к API: {api_url[:100]}...")
@@ -116,7 +116,8 @@ def get_employee_data(employee_id, records):
         logging.debug(f"Проверяем row {i}: keys={list(row.keys())}")
     
     for row in records:
-        table_id = str(row.get("Табельный номер", "")).replace(",", "")
+        table_id = str(row.get("Табельный номер", "")).replace(",", "").replace(" ", "")
+        employee_id = employee_id.replace(" ", "")
         if table_id == employee_id:
             logging.info(f"✅ Найдена инф. для сотрудника {employee_id}")
             return {
