@@ -20,6 +20,7 @@ logging.basicConfig(
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 # ================= ENV =================
+ADMIN_ID = os.getenv("ADMIN_BOT_ID")
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 API_KEY = os.getenv("GOOGLE_API_KEY")
 REGISTRY_ID = os.getenv("REGISTRY_SPREADSHEET_ID")
