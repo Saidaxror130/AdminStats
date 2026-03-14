@@ -20,90 +20,21 @@ logging.basicConfig(
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 # ================= ENV =================
-ADMIN_ID = os.getenv("ADMIN_BOT_ID")
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 API_KEY = os.getenv("GOOGLE_API_KEY")
 REGISTRY_ID = os.getenv("REGISTRY_SPREADSHEET_ID")
+ADMIN_ID = os.getenv("ADMIN_BOT_ID")
 
 if not TOKEN:
-    raise ValueError("TELEGRAM_BOT_TOKEN не установлен")
+    raise ValueError("TELEGRAM_BOT_TOKEN не установлен ⚠️")
 if not API_KEY:
-    raise ValueError("GOOGLE_API_KEY не установлен")
+    raise ValueError("GOOGLE_API_KEY не установлен ⚠️")
 if not REGISTRY_ID:
-    raise ValueError("REGISTRY_SPREADSHEET_ID не установлен")
+    raise ValueError("REGISTRY_SPREADSHEET_ID не установлен ⚠️")
+if not ADMIN_ID:
+    raise ValueError("ADMIN_BOT_ID не установлен ⚠️")
 
-# ================= NORMALIZE =================
-
-def normalize_id(value):
-    """Удаляет обычные и невидимые пробелы (\xa0)"""
-    if value is None:
-        return ""
-
-    return (
-        str(value)
-        .replace(",", "")
-        .replace(" ", "")
-        .replace("\xa0", "")
-        .strip()
-    )
-
-# ================= HELPERS =================
-
-def load_sheet_values(api_url: str):
-    try:
-        response = requests.get(api_url, timeout=15)
-        response.raise_for_status()
-        data = response.json()
-        return data.get("values", [])
-    except requests.exceptions.HTTPError as e:
-
-    error_text = f"""
-🚨 Ошибка Google API
-
-URL:
-{api_url}
-
-Status:
-{e.response.status_code}
-
-Ответ:
-{e.response.text}
-"""
-
-    logging.error(error_text)
-
-    send_admin_message(error_text)
-
-    return []
-        return []
-    except Exception as e:
-        logging.error(f"Ошибка загрузки {api_url}: {e}")
-        return []
-
-
-def load_records(api_url: str):
-    values = load_sheet_values(api_url)
-
-    if not values:
-
-    msg = "⚠️ Таблица пустая или не загрузилась"
-
-    logging.warning(msg)
-
-    send_admin_message(msg)
-
-    return []
-
-    headers = values[0]
-
-    records = []
-
-    for row in values[1:]:
-        record = dict(zip(headers, row))
-        records.append(record)
-
-    return records
-
+# ================= ADMIN ALERT =================
 
 def send_admin_message(text):
 
@@ -123,12 +54,103 @@ def send_admin_message(text):
     except Exception as e:
         logging.error(f"Не удалось отправить сообщение админу: {e}")
 
+
+# ================= NORMALIZE =================
+
+def normalize_id(value):
+
+    if value is None:
+        return ""
+
+    return (
+        str(value)
+        .replace(",", "")
+        .replace(" ", "")
+        .replace("\xa0", "")
+        .strip()
+    )
+
+
+# ================= HELPERS =================
+
+def load_sheet_values(api_url: str):
+
+    try:
+
+        response = requests.get(api_url, timeout=15)
+        response.raise_for_status()
+
+        data = response.json()
+
+        return data.get("values", [])
+
+    except requests.exceptions.HTTPError as e:
+
+        error_text = f"""
+🚨 Ошибка Google API
+
+URL:
+{api_url}
+
+Status:
+{e.response.status_code}
+
+Ответ:
+{e.response.text}
+"""
+
+        logging.error(error_text)
+        send_admin_message(error_text)
+
+        return []
+
+    except Exception as e:
+
+        error_text = f"""
+🚨 Ошибка загрузки таблицы
+
+URL:
+{api_url}
+
+Ошибка:
+{e}
+"""
+
+        logging.error(error_text)
+        send_admin_message(error_text)
+
+        return []
+
+
+def load_records(api_url: str):
+
+    values = load_sheet_values(api_url)
+
+    if not values:
+
+        msg = "⚠️ Таблица пустая или не загрузилась"
+
+        logging.warning(msg)
+        send_admin_message(msg)
+
+        return []
+
+    headers = values[0]
+
+    records = []
+
+    for row in values[1:]:
+
+        record = dict(zip(headers, row))
+
+        records.append(record)
+
+    return records
+
+
 # ================= REGISTRY =================
 
 def get_registry_ids(registry_spreadsheet_id: str):
-    """
-    Читает таблицу‑реестр и возвращает список spreadsheet_id
-    """
 
     api_url = (
         f"https://sheets.googleapis.com/v4/spreadsheets/{registry_spreadsheet_id}"
@@ -140,6 +162,7 @@ def get_registry_ids(registry_spreadsheet_id: str):
     ids = []
 
     for row in values:
+
         if row and row[0]:
             ids.append(row[0].strip())
 
@@ -148,8 +171,8 @@ def get_registry_ids(registry_spreadsheet_id: str):
     return ids
 
 
-# Загружаем список территорий
 SHEET_IDS = get_registry_ids(REGISTRY_ID)
+
 
 # ================= SEARCH =================
 
@@ -173,7 +196,9 @@ def get_employee_data(employee_id, records):
 
         if table_id == employee_id:
 
-            logging.info(f"🎉Успешно найден сотрудник {employee_id} в таблице, {row.get('ПВЗ', 'N/A')} ({row.get('ФИО', 'N/A')}) ")
+            logging.info(
+                f"🎉Успешно найден сотрудник {employee_id} в таблице {row.get('ПВЗ', 'N/A')}"
+            )
 
             return {
                 "fio": row.get("ФИО", "N/A"),
@@ -192,10 +217,13 @@ def get_employee_data(employee_id, records):
 
 def find_employee_across_sheets(employee_id: str, role: str):
 
-    logging.info(f"🔍Начинаем поиск {employee_id} роль: {role}")
+    logging.info(f"🔍Начинаем поиск {employee_id}")
 
     if not SHEET_IDS:
+
         logging.error("Реестр таблиц пустой")
+        send_admin_message("🚨 Реестр таблиц пустой")
+
         return None
 
     for spreadsheet_id in SHEET_IDS:
@@ -216,7 +244,7 @@ def find_employee_across_sheets(employee_id: str, role: str):
 
         except Exception as e:
 
-    error = f"""
+            error = f"""
 🚨 Ошибка проверки таблицы
 
 Spreadsheet:
@@ -226,16 +254,18 @@ Spreadsheet:
 {e}
 """
 
-    logging.error(error)
+            logging.error(error)
+            send_admin_message(error)
 
-    send_admin_message(error)
-
-    logging.warning(f"{employee_id} не найден ни в одной таблице❌")
+    logging.warning(f"{employee_id} не найден")
 
     return None
 
+
 # ================= STATES =================
+
 SELECT_ROLE, ENTER_ID = range(2)
+
 
 # ================= HANDLERS =================
 
@@ -243,13 +273,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [
         [InlineKeyboardButton("Админ", callback_data="admin")],
-        [InlineKeyboardButton("МФУ (Менеджер финансовых услуг)", callback_data="mfu")],
+        [InlineKeyboardButton("МФУ", callback_data="mfu")],
     ]
 
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     await update.message.reply_text(
-        "Привет! Я бот для просмотра показателей сотрудников.\n\nВыберите вашу должность:",
+        "Привет! Выберите должность:",
         reply_markup=reply_markup,
     )
 
@@ -283,63 +313,41 @@ async def enter_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if data:
 
-            if role == "admin":
+            text = f"""
+ФИО: {data['fio']}
+ПВЗ: {data['pvz']}
 
-                text = f"""*ПВЗ:* {data['pvz']}
-*ФИО:* {data['fio']}
+Факт часов: {data['fact']}
 
-*Факт часов:* {data['fact']}
+Виртуальные карты: {data['virtual_cards']}
+Пластиковые карты: {data['plastic_cards']}
 
-*Кол. лимитов:* {data['open_limits']}
-*План по лимитам:* {data['plan_limits']}
-*Выполнение плана:* {data['execution']}
-
-*ВИРТУАЛЬНЫЕ карты:* {data['virtual_cards']}
-*ПЛАСТИКОВЫЕ карты:* {data['plastic_cards']}
-
-*ВЧЛ:* {data['vchl']}
-
-Выберите должность для нового поиска:"""
-
-            else:
-
-                text = f"""*ФИО:* {data['fio']}
-*ПВЗ:* {data['pvz']}
-
-*Факт часов:* {data['fact']}
-
-*Оформленные ВИРТУАЛЬНЫЕ карты:* {data['virtual_cards']}
-*Оформленные ПЛАСТИКОВЫЕ карты:* {data['plastic_cards']}
-
-*ВЧЛ:* {data['vchl']}
-
-Выберите должность для нового поиска:"""
+ВЧЛ: {data['vchl']}
+"""
 
             keyboard = [
                 [InlineKeyboardButton("Админ", callback_data="admin")],
-                [InlineKeyboardButton("МФУ (Менеджер финансовых услуг)", callback_data="mfu")],
+                [InlineKeyboardButton("МФУ", callback_data="mfu")],
             ]
 
             reply_markup = InlineKeyboardMarkup(keyboard)
 
-            await update.message.reply_text(
-                text, parse_mode="Markdown", reply_markup=reply_markup
-            )
+            await update.message.reply_text(text, reply_markup=reply_markup)
 
             return SELECT_ROLE
 
         else:
 
             await update.message.reply_text(
-                "❌ Табельный номер не найден. \n\nВведите табельный номер:"
+                "❌ Табельный номер не найден\nВведите снова:"
             )
 
             return ENTER_ID
 
     except Exception as e:
 
-    error = f"""
-🚨 Ошибка в обработке запроса
+        error = f"""
+🚨 Ошибка обработки запроса
 
 User:
 {update.effective_user.id}
@@ -351,15 +359,31 @@ User:
 {e}
 """
 
-    logging.error(error)
+        logging.error(error)
+        send_admin_message(error)
 
-    send_admin_message(error)
-
-        logging.error(f"Ошибка в enter_id: {e}")
-
-        await update.message.reply_text("Произошла ошибка!. Попробуйте снова.\n\n /start")
+        await update.message.reply_text("Ошибка. Напишите /start")
 
         return SELECT_ROLE
+
+
+# ================= GLOBAL ERROR =================
+
+async def error_handler(update, context):
+
+    error = f"""
+🚨 GLOBAL ERROR
+
+Update:
+{update}
+
+Error:
+{context.error}
+"""
+
+    logging.error(error)
+    send_admin_message(error)
+
 
 # ================= MAIN =================
 
@@ -377,25 +401,9 @@ if __name__ == "__main__":
     )
 
     application.add_handler(conv_handler)
-    send_admin_message("🤖 Бот запущен успешно")
 
-    async def error_handler(update, context):
+    application.add_error_handler(error_handler)
 
-    error = f"""
-🚨 GLOBAL ERROR
+    send_admin_message("🤖 Бот запущен")
 
-Update:
-{update}
-
-Error:
-{context.error}
-"""
-
-    logging.error(error)
-
-    send_admin_message(error)
-
-
-application.add_error_handler(error_handler)
-    
     application.run_polling()
