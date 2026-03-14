@@ -228,17 +228,17 @@ async def enter_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             if role == "admin":
 
-                text = f"""*ФИО:* {data['fio']}
-*ПВЗ:* {data['pvz']}
+                text = f"""*ПВЗ:* {data['pvz']}
+*ФИО:* {data['fio']}
 
 *Факт часов:* {data['fact']}
 
-*Кол. открытых лимитов:* {data['open_limits']}
+*Кол. лимитов:* {data['open_limits']}
 *План по лимитам:* {data['plan_limits']}
 *Выполнение плана:* {data['execution']}
 
-*Оформленные ВИРТУАЛЬНЫЕ карты:* {data['virtual_cards']}
-*Оформленные ПЛАСТИКОВЫЕ карты:* {data['plastic_cards']}
+*ВИРТУАЛЬНЫЕ карты:* {data['virtual_cards']}
+*ПЛАСТИКОВЫЕ карты:* {data['plastic_cards']}
 
 *ВЧЛ:* {data['vchl']}
 
