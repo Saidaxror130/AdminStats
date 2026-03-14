@@ -217,7 +217,7 @@ def get_employee_data(employee_id, records):
 
 def find_employee_across_sheets(employee_id: str, role: str):
 
-    logging.info(f"🔍Начинаем поиск {employee_id}")
+    logging.info(f"🔍Начинаем поиск {employee_id} роль: {role}")
 
     if not SHEET_IDS:
 
@@ -392,6 +392,9 @@ User:
 
 async def error_handler(update, context):
 
+    if "terminated by other getUpdates request" in str(context.error):
+        return
+
     error = f"""
 🚨 GLOBAL ERROR
 
@@ -403,6 +406,7 @@ Error:
 """
 
     logging.error(error)
+
     send_admin_message(error)
 
 
