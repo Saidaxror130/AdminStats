@@ -305,7 +305,18 @@ async def enter_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
 
-        employee_id = normalize_id(update.message.text)
+        # employee_id = normalize_id(update.message.text)
+        user_text = update.message.text.strip()
+
+        if not user_text.isdigit() or len(user_text) < 3 or len(user_text) > 6:
+
+            await update.message.reply_text(
+                "❌ Табельный номер должен содержать только цифры.\n\nВведите табельный номер:"
+            )
+
+            return ENTER_ID
+
+        employee_id = normalize_id(user_text)
 
         role = context.user_data.get("role")
 
