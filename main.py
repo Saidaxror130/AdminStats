@@ -55,7 +55,25 @@ def load_sheet_values(api_url: str):
         data = response.json()
         return data.get("values", [])
     except requests.exceptions.HTTPError as e:
-        logging.error(f"HTTP ошибка {e.response.status_code}: {e.response.text}")
+
+    error_text = f"""
+🚨 Ошибка Google API
+
+URL:
+{api_url}
+
+Status:
+{e.response.status_code}
+
+Ответ:
+{e.response.text}
+"""
+
+    logging.error(error_text)
+
+    send_admin_message(error_text)
+
+    return []
         return []
     except Exception as e:
         logging.error(f"Ошибка загрузки {api_url}: {e}")
@@ -66,8 +84,14 @@ def load_records(api_url: str):
     values = load_sheet_values(api_url)
 
     if not values:
-        logging.warning("Таблица пуста!")
-        return []
+
+    msg = "⚠️ Таблица пустая или не загрузилась"
+
+    logging.warning(msg)
+
+    send_admin_message(msg)
+
+    return []
 
     headers = values[0]
 
@@ -78,6 +102,25 @@ def load_records(api_url: str):
         records.append(record)
 
     return records
+
+
+def send_admin_message(text):
+
+    try:
+
+        url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+
+        requests.post(
+            url,
+            json={
+                "chat_id": ADMIN_ID,
+                "text": text
+            },
+            timeout=10
+        )
+
+    except Exception as e:
+        logging.error(f"Не удалось отправить сообщение админу: {e}")
 
 # ================= REGISTRY =================
 
@@ -171,7 +214,20 @@ def find_employee_across_sheets(employee_id: str, role: str):
                 return data
 
         except Exception as e:
-            logging.error(f"Ошибка проверки таблицы {spreadsheet_id}: {e}")
+
+    error = f"""
+🚨 Ошибка проверки таблицы
+
+Spreadsheet:
+{spreadsheet_id}
+
+Ошибка:
+{e}
+"""
+
+    logging.error(error)
+
+    send_admin_message(error)
 
     logging.warning(f"{employee_id} не найден ни в одной таблице❌")
 
@@ -281,6 +337,23 @@ async def enter_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     except Exception as e:
 
+    error = f"""
+🚨 Ошибка в обработке запроса
+
+User:
+{update.effective_user.id}
+
+Сообщение:
+{update.message.text}
+
+Ошибка:
+{e}
+"""
+
+    logging.error(error)
+
+    send_admin_message(error)
+
         logging.error(f"Ошибка в enter_id: {e}")
 
         await update.message.reply_text("Произошла ошибка!. Попробуйте снова.\n\n /start")
@@ -303,5 +376,25 @@ if __name__ == "__main__":
     )
 
     application.add_handler(conv_handler)
+    send_admin_message("🤖 Бот запущен успешно")
 
+    async def error_handler(update, context):
+
+    error = f"""
+🚨 GLOBAL ERROR
+
+Update:
+{update}
+
+Error:
+{context.error}
+"""
+
+    logging.error(error)
+
+    send_admin_message(error)
+
+
+application.add_error_handler(error_handler)
+    
     application.run_polling()
