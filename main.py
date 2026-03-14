@@ -257,7 +257,7 @@ Spreadsheet:
             logging.error(error)
             send_admin_message(error)
 
-    logging.warning(f"{employee_id} не найден ни в одной таблице❌")
+    logging.warning(f"{employee_id} роль: {role} не найден ни в одной таблице❌")
 
     return None
 
@@ -315,34 +315,34 @@ async def enter_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             if role == "admin":
 
-                text = f"""ФИО: {data['fio']}
-*ПВЗ:* {data['pvz']}
+                text = f"""👤<b>ФИО:</b> {data['fio']}
+🏢<b>ПВЗ:</b> {data['pvz']}
 
-*Факт часов:* {data['fact']} ⏱️
+<b>Факт часов:</b> {data['fact']} ⏱️
 
-*Кол. открытых лимитов:* {data['open_limits']} ☑️
-*План по лимитам:* {data['plan_limits']} 📋
-*Выполнение плана:* {data['execution']}
+<b>Кол. открытых лимитов:</b> {data['open_limits']} 📊
+<b>План по лимитам:</b> {data['plan_limits']} 📋
+<b>Выполнение плана:</b> {data['execution']} 📈
 
-*Виртуальные карты:* {data['virtual_cards']} 💷
-*Пластиковые карты:* {data['plastic_cards']} 💳
+<b>Виртуальные карты:</b> {data['virtual_cards']} 💷
+<b>Пластиковые карты:</b> {data['plastic_cards']} 💳
 
-*ВЧЛ:* {data['vchl']}
+🎥<b>ВЧЛ:</b> {data['vchl']}
 
-Выберите должность для нового поиска:"""
+<u><b>Выберите должность для нового поиска:</b></u>"""
             else:
 
-                text = f"""ФИО: {data['fio']}
-*ПВЗ:* {data['pvz']}
+                text = f"""👤<b>ФИО:</b> {data['fio']}
+🏢<b>ПВЗ:</b> {data['pvz']}
 
-*Факт часов:* {data['fact']} ⏱️
+<b>Факт часов:</b> {data['fact']} ⏱️
 
-*ВИРТУАЛЬНЫЕ карты:* {data['virtual_cards']} 💷
-*ПЛАСТИКОВЫЕ карты:* {data['plastic_cards']} 💳
+<b>ВИРТУАЛЬНЫЕ карты:</b> {data['virtual_cards']} 💷
+<b>ПЛАСТИКОВЫЕ карты:</b> {data['plastic_cards']} 💳
 
-*ВЧЛ:* {data['vchl']}
+🎥<b>ВЧЛ:</b> {data['vchl']}
 
-Выберите должность для нового поиска:"""
+<u>Выберите должность для нового поиска:</u>"""
                 
             keyboard = [
                 [InlineKeyboardButton("Админ", callback_data="admin")],
@@ -352,7 +352,7 @@ async def enter_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup = InlineKeyboardMarkup(keyboard)
 
             await update.message.reply_text(
-                text, parse_mode="Markdown", reply_markup=reply_markup
+                text, parse_mode="HTML", reply_markup=reply_markup
             )
 
             return SELECT_ROLE
