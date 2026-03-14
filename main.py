@@ -197,7 +197,7 @@ def get_employee_data(employee_id, records):
         if table_id == employee_id:
 
             logging.info(
-                f"🎉Успешно найден сотрудник {employee_id} в таблице {row.get('ПВЗ', 'N/A')}"
+                f"🎉Успешно найден сотрудник {employee_id} в таблице, {row.get('ПВЗ', 'N/A')} ({row.get('ФИО', 'N/A')})"
             )
 
             return {
@@ -257,7 +257,7 @@ Spreadsheet:
             logging.error(error)
             send_admin_message(error)
 
-    logging.warning(f"{employee_id} не найден")
+    logging.warning(f"{employee_id} не найден ни в одной таблице❌")
 
     return None
 
@@ -279,7 +279,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     await update.message.reply_text(
-        "Привет! Выберите должность:",
+        "Привет! Я бот для просмотра показателей сотрудников.\n\nВыберите вашу должность:",
         reply_markup=reply_markup,
     )
 
@@ -313,18 +313,37 @@ async def enter_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if data:
 
-            text = f"""
-ФИО: {data['fio']}
-ПВЗ: {data['pvz']}
+            if role == "admin":
 
-Факт часов: {data['fact']}
+                text = f"""ФИО: {data['fio']}
+*ПВЗ:* {data['pvz']}
 
-Виртуальные карты: {data['virtual_cards']}
-Пластиковые карты: {data['plastic_cards']}
+*Факт часов:* {data['fact']} ⏱️
 
-ВЧЛ: {data['vchl']}
-"""
+*Кол. открытых лимитов:* {data['open_limits']} ☑️
+*План по лимитам:* {data['plan_limits']} 📋
+*Выполнение плана:* {data['execution']}
 
+*Виртуальные карты:* {data['virtual_cards']} 💷
+*Пластиковые карты:* {data['plastic_cards']} 💳
+
+*ВЧЛ:* {data['vchl']}
+
+Выберите должность для нового поиска:"""
+            else:
+
+                text = f"""ФИО: {data['fio']}
+*ПВЗ:* {data['pvz']}
+
+*Факт часов:* {data['fact']} ⏱️
+
+*ВИРТУАЛЬНЫЕ карты:* {data['virtual_cards']} 💷
+*ПЛАСТИКОВЫЕ карты:* {data['plastic_cards']} 💳
+
+*ВЧЛ:* {data['vchl']}
+
+Выберите должность для нового поиска:"""
+                
             keyboard = [
                 [InlineKeyboardButton("Админ", callback_data="admin")],
                 [InlineKeyboardButton("МФУ", callback_data="mfu")],
@@ -332,14 +351,16 @@ async def enter_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             reply_markup = InlineKeyboardMarkup(keyboard)
 
-            await update.message.reply_text(text, reply_markup=reply_markup)
+            await update.message.reply_text(
+                text, parse_mode="Markdown", reply_markup=reply_markup
+            )
 
             return SELECT_ROLE
 
         else:
 
             await update.message.reply_text(
-                "❌ Табельный номер не найден\nВведите снова:"
+                "❌ Табельный номер не найден. \n\nВведите табельный номер:"
             )
 
             return ENTER_ID
@@ -362,7 +383,7 @@ User:
         logging.error(error)
         send_admin_message(error)
 
-        await update.message.reply_text("Ошибка. Напишите /start")
+        await update.message.reply_text("Произошла ошибка!. \n\nПопробуйте снова. /start")
 
         return SELECT_ROLE
 
