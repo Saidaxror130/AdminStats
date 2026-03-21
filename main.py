@@ -3,7 +3,7 @@ import requests
 import os
 import threading
 from collections import defaultdict, deque
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
@@ -44,6 +44,19 @@ if not REGISTRY_ID:
     raise ValueError("REGISTRY_SPREADSHEET_ID не установлен ⚠️")
 if not ADMIN_ID:
     raise ValueError("ADMIN_BOT_ID не установлен ⚠️")
+
+
+# ================= TIMEZONE =================
+
+TZ_TASHKENT = timezone(timedelta(hours=5))
+
+def now_tashkent() -> datetime:
+    """Возвращает текущее время по Ташкенту."""
+    return datetime.now(tz=TZ_TASHKENT)
+
+def fmt_dt(dt: datetime) -> str:
+    """Форматирует дату/время: дд.мм.гггг чч:мм:сс"""
+    return dt.strftime("%d.%m.%Y %H:%M:%S")
 
 
 # ================= ADMIN ALERT =================
@@ -187,7 +200,7 @@ def refresh_cache(notify_admin: bool = True):
     with _cache_lock:
         _cache["admin"] = new_cache["admin"]
         _cache["mfu"] = new_cache["mfu"]
-        _last_refresh = datetime.now()
+        _last_refresh = now_tashkent()
         _cache_stats = {
             "total_admin": total_admin,
             "total_mfu": total_mfu,
@@ -196,7 +209,7 @@ def refresh_cache(notify_admin: bool = True):
         }
 
     msg = (
-        f"✅ Кэш обновлён в {_last_refresh.strftime('%H:%M:%S')}\n"
+        f"✅ Кэш обновлён в {fmt_dt(_last_refresh)}\n"
         f"Таблиц: {len(sheet_ids)} | Ошибок: {errors}\n"
         f"Записей Админ: {total_admin} | МФУ: {total_mfu}"
     )
@@ -237,7 +250,7 @@ _user_searched_ids: dict = defaultdict(set)
 
 def log_request(user_id: int, username: str, employee_id: str, role: str, found: bool):
     entry = {
-        "time": datetime.now().strftime("%d.%m %H:%M:%S"),
+        "time": fmt_dt(now_tashkent()),
         "user_id": user_id,
         "username": username or "—",
         "employee_id": employee_id,
@@ -262,7 +275,7 @@ def log_request(user_id: int, username: str, employee_id: str, role: str, found:
 
 def check_rate_limit(user_id: int) -> bool:
     """Возвращает True если лимит НЕ превышен."""
-    now = datetime.now()
+    now = now_tashkent()
     window_start = now - timedelta(seconds=RATE_LIMIT_WINDOW)
 
     with _rate_lock:
@@ -347,7 +360,7 @@ async def cmd_refresh(update: Update, context: ContextTypes.DEFAULT_TYPE):
         s = _cache_stats
         await update.message.reply_text(
             f"✅ Кэш обновлён!\n\n"
-            f"🕐 Время: {_last_refresh.strftime('%H:%M:%S')}\n"
+            f"🕐 Время: {fmt_dt(_last_refresh)}\n"
             f"📋 Таблиц: {s['sheet_count']}\n"
             f"❌ Ошибок: {s['errors']}\n"
             f"👤 Записей Админ: {s['total_admin']}\n"
@@ -365,7 +378,7 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     s = _cache_stats
 
     if _last_refresh:
-        age = datetime.now() - _last_refresh
+        age = now_tashkent() - _last_refresh
         minutes = int(age.total_seconds() // 60)
         seconds = int(age.total_seconds() % 60)
         age_str = f"{minutes} мин {seconds} сек назад"
@@ -439,7 +452,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     if _last_refresh:
-        cache_info = f"\n\n🕐 Данные актуальны на: {_last_refresh.strftime('%H:%M:%S')}"
+        cache_info = f"\n\n🕐 Данные актуальны на: {fmt_dt(_last_refresh)}"
     else:
         cache_info = "\n\n⏳ Данные загружаются..."
 
@@ -529,7 +542,7 @@ async def enter_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if _last_refresh is None:
                 note = "\n\n⏳ Кэш ещё загружается, попробуйте через минуту."
             else:
-                note = f"\n\n🕐 Данные актуальны на: {_last_refresh.strftime('%H:%M:%S')}"
+                note = f"\n\n🕐 Последнее обновление: {fmt_dt(_last_refresh)}"
 
             await update.message.reply_text(
                 f"❌ Табельный номер не найден.{note}\n\nВведите табельный номер:"
