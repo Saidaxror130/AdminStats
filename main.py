@@ -452,7 +452,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     if _last_refresh:
-        cache_info = f"\n\n🕐 Данные актуальны на: {fmt_dt(_last_refresh)}"
+        cache_info = f"\n\n🕐 Последнее обновление: {fmt_dt(_last_refresh)}"
     else:
         cache_info = "\n\n⏳ Данные загружаются..."
 
