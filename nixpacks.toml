@@ -1,3 +1,2 @@
 [start]
-cmd = "PYTHONPATH=/app python /app/main.py"
- 
+cmd = "python bot.py"
