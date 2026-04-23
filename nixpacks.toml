@@ -1,0 +1,3 @@
+[start]
+cmd = "PYTHONPATH=/app python /app/main.py"
+ 
