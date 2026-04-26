@@ -7,9 +7,10 @@ import io
 from PIL import Image, ImageDraw, ImageFont
 
 # ── Пути к шрифтам ──────────────────────────────────────────────────────────
-_FONT_DIR = "/usr/share/fonts/truetype/dejavu/"
-_FONT_REG  = _FONT_DIR + "DejaVuSans.ttf"
-_FONT_BOLD = _FONT_DIR + "DejaVuSans-Bold.ttf"
+import os as _os
+_FONT_DIR = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..", "assets", "fonts")
+_FONT_REG  = _os.path.join(_FONT_DIR, "DejaVuSans.ttf")
+_FONT_BOLD = _os.path.join(_FONT_DIR, "DejaVuSans-Bold.ttf")
 
 # ── Палитра ─────────────────────────────────────────────────────────────────
 _BG      = (15,  17,  26)
