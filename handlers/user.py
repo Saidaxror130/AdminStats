@@ -8,6 +8,7 @@ from cache import (
 )
 from utils.helpers import fmt_dt, normalize_id
 from session_cache import get_role, set_role, clear_role
+from utils.card_generator import generate_card
 import cache as c
 
 # ================= STATES =================
@@ -26,6 +27,7 @@ def role_keyboard():
 def new_search_keyboard():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🔍  Новый поиск", callback_data="new_search")],
+        [InlineKeyboardButton("🖼  Поделиться карточкой", callback_data="share_card")],
     ])
 
 
@@ -124,6 +126,26 @@ async def select_role(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = query.data
 
+    # ── Генерация и отправка карточки ───────────────────────────────────────
+    if data == "share_card":
+        employee = context.user_data.get("last_employee")
+        role = get_role(query.from_user.id)
+        if not employee or not role:
+            await query.answer("Данные устарели, сделайте новый поиск.", show_alert=True)
+            return SELECT_ROLE
+        await query.answer("Генерирую карточку...")
+        try:
+            png_bytes = generate_card(employee, role)
+            await query.message.reply_photo(
+                photo=png_bytes,
+                caption=f"📊 {employee.get('fio', '')} · {employee.get('pvz', '')}",
+            )
+        except Exception as e:
+            logging.error(f"Ошибка генерации карточки: {e}")
+            await query.answer("Не удалось создать карточку.", show_alert=True)
+        return SELECT_ROLE
+
+    # ── Новый поиск ─────────────────────────────────────────────────────────
     if data == "new_search":
         role = get_role(query.from_user.id)
         if not role:
@@ -184,6 +206,9 @@ async def enter_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         if data:
+            # Сохраняем для генерации карточки
+            context.user_data["last_employee"] = data
+
             text = format_card_admin(data) if role == "admin" else format_card_mfu(data)
             await update.message.reply_text(
                 text,
