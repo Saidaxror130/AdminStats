@@ -14,13 +14,14 @@ _BOLD = lambda s: ImageFont.truetype(_os.path.join(_FONT_DIR, "DejaVuSans-Bold.t
 BG      = (18,  20,  28)
 SURFACE = (28,  32,  44)
 CARD    = (34,  38,  54)
-GREEN   = (46,  204, 110)
+GREEN   = (80, 255, 160)
 RED     = (220,  70,  70)
 YELLOW  = (255, 185,  50)
 WHITE   = (235, 242, 255)
-MUTED   = (110, 125, 160)
+MUTED   = (140, 155, 190)
 W       = 520
 PAD     = 24
+ICON    = (90, 200, 140)
 
 
 def _rrect(draw, xy, fill, r=18):
@@ -42,27 +43,27 @@ def _initials(name: str) -> str:
 # ── Иконки (чистая геометрия, без emoji) ────────────────────────────────────
 
 def _icon_clock(draw, cx, cy, r=14):
-    draw.ellipse([cx-r, cy-r, cx+r, cy+r], outline=MUTED, width=2)
-    draw.line([cx, cy, cx, cy-r+4], fill=MUTED, width=2)
-    draw.line([cx, cy, cx+r-5, cy+3], fill=MUTED, width=2)
-    draw.ellipse([cx-2, cy-2, cx+2, cy+2], fill=MUTED)
+    draw.ellipse([cx-r, cy-r, cx+r, cy+r], outline=ICON, width=2)
+    draw.line([cx, cy, cx, cy-r+4], fill=ICON, width=2)
+    draw.line([cx, cy, cx+r-5, cy+3], fill=ICON, width=2)
+    draw.ellipse([cx-2, cy-2, cx+2, cy+2], fill=ICON)
 
 
 def _icon_chart(draw, cx, cy, r=13):
     bw = 5
     for x, h in zip([cx-9, cx-2, cx+5], [8, 13, 10]):
-        draw.rectangle([x, cy+r-h, x+bw, cy+r], fill=MUTED)
-    draw.line([cx-r, cy+r+1, cx+r, cy+r+1], fill=MUTED, width=1)
+        draw.rectangle([x, cy+r-h, x+bw, cy+r], fill=ICON)
+    draw.line([cx-r, cy+r+1, cx+r, cy+r+1], fill=ICON, width=1)
 
 
 def _icon_card(draw, cx, cy, r=13):
-    draw.rounded_rectangle([cx-r, cy-8, cx+r, cy+8], radius=3, outline=MUTED, width=2)
-    draw.line([cx-r+2, cy-2, cx+r-2, cy-2], fill=MUTED, width=3)
+    draw.rounded_rectangle([cx-r, cy-8, cx+r, cy+8], radius=3, outline=ICON, width=2)
+    draw.line([cx-r+2, cy-2, cx+r-2, cy-2], fill=ICON, width=3)
 
 
 def _icon_play(draw, cx, cy, r=13):
-    draw.ellipse([cx-r, cy-r, cx+r, cy+r], outline=MUTED, width=2)
-    draw.polygon([cx-4, cy-7, cx-4, cy+7, cx+8, cy], fill=MUTED)
+    draw.ellipse([cx-r, cy-r, cx+r, cy+r], outline=ICON, width=2)
+    draw.polygon([cx-4, cy-7, cx-4, cy+7, cx+8, cy], fill=ICON)
 
 
 def _checkmark(draw, cx, cy, r=16):
@@ -73,10 +74,30 @@ def _checkmark(draw, cx, cy, r=16):
         draw.line([pts[i], pts[i+1]], fill=GREEN, width=3)
 
 
+
+def _shadow(draw, xy, r=18):
+    x1, y1, x2, y2 = xy
+    draw.rounded_rectangle(
+        [x1+2, y1+4, x2+2, y2+4],
+        radius=r,
+        fill=(10, 12, 18)
+    )
+
 # ── Главная функция ──────────────────────────────────────────────────────────
 
 def generate_card(data: dict, role: str) -> bytes:
-    img  = Image.new("RGB", (W, 820), BG)
+    def _gradient(h):
+        img = Image.new("RGB", (W, h), BG)
+        px = img.load()
+        for y in range(h):
+            t = y / h
+            r = int(18 + t * 8)
+            g = int(20 + t * 10)
+            b = int(28 + t * 18)
+            for x in range(W):
+                px[x, y] = (r, g, b)
+        return img
+    img = _gradient(820)
     draw = ImageDraw.Draw(img)
     y    = PAD
 
@@ -104,11 +125,15 @@ def generate_card(data: dict, role: str) -> bytes:
     # Бейдж роли
     role_label = "Администратор" if role == "admin" else "МФУ"
     bw = len(role_label) * 10 + 32
-    _rrect(draw, [PAD, y, PAD + bw, y + 32], GREEN, r=8)
-    draw.text((PAD + 16, y + 7), role_label, font=_BOLD(15), fill=(10, 20, 10))
+    BADGE_BG = (30, 90, 60)
+    BADGE_TX = (120, 255, 170)
+
+    _rrect(draw, [PAD, y, PAD + bw, y + 32], BADGE_BG, r=10)
+    draw.text((PAD + 16, y + 7), role_label, font=_BOLD(15), fill=BADGE_TX)
     y += 50
 
     # ── Блок: Факт часов ────────────────────────────────────────────────────
+    _shadow(draw, [PAD, y, W-PAD, y+68])
     _rrect(draw, [PAD, y, W-PAD, y+68], CARD)
     _icon_clock(draw, PAD+30, y+34)
     draw.text((PAD+54, y+18), "ФАКТ ЧАСОВ", font=_BOLD(13), fill=MUTED)
@@ -118,7 +143,8 @@ def generate_card(data: dict, role: str) -> bytes:
 
     # ── Блок: Лимиты (только admin) ─────────────────────────────────────────
     if role == "admin":
-        _rrect(draw, [PAD, y, W-PAD, y+90], CARD)
+        _shadow(draw, [PAD, y, W-PAD, y+68])
+        _rrect(draw, [PAD, y, W-PAD, y+68], CARD)
         _icon_chart(draw, PAD+30, y+38)
         draw.text((PAD+54, y+14), "ЛИМИТЫ", font=_BOLD(13), fill=MUTED)
 
@@ -133,12 +159,13 @@ def generate_card(data: dict, role: str) -> bytes:
         y += 102
 
     # ── Блок: Карты ─────────────────────────────────────────────────────────
-    _rrect(draw, [PAD, y, W-PAD, y+90], CARD)
+    _shadow(draw, [PAD, y, W-PAD, y+68])
+    _rrect(draw, [PAD, y, W-PAD, y+68], CARD)
     _icon_card(draw, PAD+30, y+38)
     draw.text((PAD+54, y+14), "КАРТЫ", font=_BOLD(13), fill=MUTED)
 
     mid = W // 2
-    draw.text((mid-40, y+34), str(data.get("virtual_cards", "—")), font=_BOLD(30), fill=WHITE)
+    draw.text((mid-40, y+34), str(data.get("virtual_cards", "—")), font=_BOLD(30), anchor="mm", fill=WHITE)
     draw.text((mid-40, y+66), "Виртуальные", font=_REG(13), fill=MUTED)
     draw.text((W-PAD-12, y+34), str(data.get("plastic_cards", "—")),
               font=_BOLD(30), fill=WHITE, anchor="ra")
@@ -146,6 +173,7 @@ def generate_card(data: dict, role: str) -> bytes:
     y += 102
 
     # ── Блок: ВЧЛ ───────────────────────────────────────────────────────────
+    _shadow(draw, [PAD, y, W-PAD, y+68])
     _rrect(draw, [PAD, y, W-PAD, y+68], CARD)
     _icon_play(draw, PAD+30, y+34)
     draw.text((PAD+54, y+18), "ВЧЛ", font=_BOLD(13), fill=MUTED)
@@ -157,6 +185,10 @@ def generate_card(data: dict, role: str) -> bytes:
     draw.text((vx, y+10), vchl_val, font=_BOLD(34), fill=vchl_color, anchor="ra")
     if is_100:
         _checkmark(draw, W-PAD-22, y+34)
+        draw.ellipse(
+            [W-PAD-32, y+20, W-PAD-12, y+48],
+            outline=(80, 255, 160)
+        )
     y += 80
 
     # Footer
