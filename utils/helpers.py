@@ -9,8 +9,8 @@ def now_tashkent() -> datetime:
 
 
 def fmt_dt(dt: datetime) -> str:
-    """Форматирует дату/время: дд.мм.гггг чч:мм:сс"""
-    return dt.strftime("%d.%m.%Y %H:%M:%S")
+    """Форматирует дату/время: дд.мм.гггг чч:мм"""
+    return dt.strftime("%d.%m.%Y %H:%M")
 
 
 def normalize_id(value) -> str:
