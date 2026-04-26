@@ -1,172 +1,171 @@
 """
 Генерация PNG-карточки сотрудника через Pillow.
-Возвращает bytes — готово для отправки через bot.send_photo().
+Возвращает bytes — готово для bot.send_photo().
 """
 
 import io
+import os as _os
 from PIL import Image, ImageDraw, ImageFont
 
-# ── Пути к шрифтам ──────────────────────────────────────────────────────────
-import os as _os
 _FONT_DIR = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..", "assets", "fonts")
-_FONT_REG  = _os.path.join(_FONT_DIR, "DejaVuSans.ttf")
-_FONT_BOLD = _os.path.join(_FONT_DIR, "DejaVuSans-Bold.ttf")
+_REG  = lambda s: ImageFont.truetype(_os.path.join(_FONT_DIR, "DejaVuSans.ttf"), s)
+_BOLD = lambda s: ImageFont.truetype(_os.path.join(_FONT_DIR, "DejaVuSans-Bold.ttf"), s)
 
-# ── Палитра ─────────────────────────────────────────────────────────────────
-_BG      = (15,  17,  26)
-_SURFACE = (24,  28,  42)
-_ACCENT  = (99, 145, 255)
-_DIVIDER = (38,  44,  64)
-_WHITE   = (240, 244, 255)
-_MUTED   = (130, 140, 170)
-_SUCCESS = ( 72, 199, 142)
-_WARN    = (255, 190,  80)
-_BADGE   = ( 30,  36,  60)
-
-_W   = 680
-_PAD = 40
+BG      = (18,  20,  28)
+SURFACE = (28,  32,  44)
+CARD    = (34,  38,  54)
+GREEN   = (46,  204, 110)
+RED     = (220,  70,  70)
+YELLOW  = (255, 185,  50)
+WHITE   = (235, 242, 255)
+MUTED   = (110, 125, 160)
+W       = 520
+PAD     = 24
 
 
-def _fnt(bold: bool, size: int) -> ImageFont.FreeTypeFont:
-    path = _FONT_BOLD if bold else _FONT_REG
-    return ImageFont.truetype(path, size)
+def _rrect(draw, xy, fill, r=18):
+    draw.rounded_rectangle(list(xy), radius=r, fill=fill)
 
 
-def _rrect(draw: ImageDraw.Draw, xy, fill, radius: int = 12):
-    draw.rounded_rectangle(list(xy), radius=radius, fill=fill)
-
-
-def _hline(draw: ImageDraw.Draw, y: int):
-    draw.line([(_PAD, y), (_W - _PAD, y)], fill=_DIVIDER, width=1)
-
-
-def _section_label(draw: ImageDraw.Draw, y: int, text: str) -> int:
-    draw.text((_PAD, y), text, font=_fnt(True, 13), fill=_ACCENT)
-    return y + 24
-
-
-def _kv_row(draw: ImageDraw.Draw, y: int,
-            label: str, value: str,
-            value_color=_WHITE, value_size: int = 17) -> int:
-    draw.text((_PAD + 8, y), label, font=_fnt(False, 16), fill=_MUTED)
-    draw.text((_W - _PAD, y), value,
-              font=_fnt(True, value_size), fill=value_color, anchor="ra")
-    return y + 28
+def _exec_color(val):
+    try:
+        n = float(str(val).replace("%", "").replace(",", ".").strip())
+        return GREEN if n >= 80 else (YELLOW if n >= 50 else RED)
+    except Exception:
+        return MUTED
 
 
 def _initials(name: str) -> str:
-    parts = name.split()
-    letters = [p[0] for p in parts if p]
-    return "".join(letters[:2]).upper()
+    return "".join(p[0] for p in name.split() if p)[:2].upper()
 
 
-def _mini_blocks(draw: ImageDraw.Draw, y: int, blocks: list[tuple]) -> int:
-    """blocks = [(label, value, color), ...]  — рисует горизонтальные плитки"""
-    count = len(blocks)
-    gap   = 12
-    bw    = (_W - 2 * _PAD - gap * (count - 1)) // count
-    bh    = 72
+# ── Иконки (чистая геометрия, без emoji) ────────────────────────────────────
 
-    for i, (lbl, val, vc) in enumerate(blocks):
-        bx = _PAD + i * (bw + gap)
-        _rrect(draw, [bx, y, bx + bw, y + bh], _DIVIDER, radius=10)
-        draw.text((bx + bw // 2, y + 22), str(val),
-                  font=_fnt(True, 22), fill=vc, anchor="mm")
-        draw.text((bx + bw // 2, y + 52), lbl,
-                  font=_fnt(False, 13), fill=_MUTED, anchor="mm")
+def _icon_clock(draw, cx, cy, r=14):
+    draw.ellipse([cx-r, cy-r, cx+r, cy+r], outline=MUTED, width=2)
+    draw.line([cx, cy, cx, cy-r+4], fill=MUTED, width=2)
+    draw.line([cx, cy, cx+r-5, cy+3], fill=MUTED, width=2)
+    draw.ellipse([cx-2, cy-2, cx+2, cy+2], fill=MUTED)
 
-    return y + bh + 16
 
+def _icon_chart(draw, cx, cy, r=13):
+    bw = 5
+    for x, h in zip([cx-9, cx-2, cx+5], [8, 13, 10]):
+        draw.rectangle([x, cy+r-h, x+bw, cy+r], fill=MUTED)
+    draw.line([cx-r, cy+r+1, cx+r, cy+r+1], fill=MUTED, width=1)
+
+
+def _icon_card(draw, cx, cy, r=13):
+    draw.rounded_rectangle([cx-r, cy-8, cx+r, cy+8], radius=3, outline=MUTED, width=2)
+    draw.line([cx-r+2, cy-2, cx+r-2, cy-2], fill=MUTED, width=3)
+
+
+def _icon_play(draw, cx, cy, r=13):
+    draw.ellipse([cx-r, cy-r, cx+r, cy+r], outline=MUTED, width=2)
+    draw.polygon([cx-4, cy-7, cx-4, cy+7, cx+8, cy], fill=MUTED)
+
+
+def _checkmark(draw, cx, cy, r=16):
+    draw.ellipse([cx-r, cy-r, cx+r, cy+r], outline=GREEN, width=2)
+    # галочка
+    pts = [(cx-8, cy), (cx-2, cy+7), (cx+9, cy-7)]
+    for i in range(len(pts)-1):
+        draw.line([pts[i], pts[i+1]], fill=GREEN, width=3)
+
+
+# ── Главная функция ──────────────────────────────────────────────────────────
 
 def generate_card(data: dict, role: str) -> bytes:
-    """
-    data  — словарь из find_employee_in_cache()
-    role  — 'admin' | 'mfu'
-    return — PNG bytes
-    """
-    # ── Холст (высота с запасом, обрежем в конце) ───────────────────────────
-    img  = Image.new("RGB", (_W, 900), _BG)
+    img  = Image.new("RGB", (W, 820), BG)
     draw = ImageDraw.Draw(img)
+    y    = PAD
 
-    # ── Карточка (surface) ──────────────────────────────────────────────────
-    _rrect(draw, [16, 16, _W - 16, 884], _SURFACE, radius=24)
+    # Аватар
+    cr = 38
+    cx, cy_av = PAD + cr, y + cr + 8
+    draw.ellipse([cx-cr, cy_av-cr, cx+cr, cy_av+cr], fill=GREEN)
+    draw.text((cx, cy_av), _initials(data.get("fio", "??")),
+              font=_BOLD(20), fill=(10, 20, 10), anchor="mm")
 
-    # Акцентная полоска сверху
-    draw.rounded_rectangle([16, 16, _W - 16, 22], radius=24, fill=_ACCENT)
+    # ФИО (перенос на 2-ю строку если длинное)
+    fio   = data.get("fio", "—")
+    words = fio.split()
+    line1 = " ".join(words[:2]) if len(words) > 2 else fio
+    line2 = " ".join(words[2:]) if len(words) > 2 else ""
+    tx = cx + cr + 18
+    draw.text((tx, y + 10), line1, font=_BOLD(20), fill=WHITE)
+    if line2:
+        draw.text((tx, y + 36), line2, font=_BOLD(20), fill=WHITE)
+    draw.text((tx, y + (62 if line2 else 38)),
+              f"ПВЗ: {data.get('pvz', '—')}", font=_REG(15), fill=MUTED)
 
-    y = 46
+    y = cy_av + cr + 18
 
-    # ── Аватар с инициалами ─────────────────────────────────────────────────
-    initials = _initials(data.get("fio", "??"))
-    cx, cy, cr = 76, y + 34, 30
-    draw.ellipse([cx - cr, cy - cr, cx + cr, cy + cr], fill=_ACCENT)
-    draw.text((cx, cy), initials, font=_fnt(True, 17), fill=_WHITE, anchor="mm")
+    # Бейдж роли
+    role_label = "Администратор" if role == "admin" else "МФУ"
+    bw = len(role_label) * 10 + 32
+    _rrect(draw, [PAD, y, PAD + bw, y + 32], GREEN, r=8)
+    draw.text((PAD + 16, y + 7), role_label, font=_BOLD(15), fill=(10, 20, 10))
+    y += 50
 
-    # ── ФИО + ПВЗ ───────────────────────────────────────────────────────────
-    fio = data.get("fio", "—")
-    pvz = data.get("pvz", "—")
-    # Если ФИО длинное — уменьшаем шрифт
-    fio_size = 17 if len(fio) > 30 else 19
-    draw.text((120, y + 6),  fio, font=_fnt(True, fio_size), fill=_WHITE)
-    draw.text((120, y + 32), f"📍 ПВЗ: {pvz}", font=_fnt(False, 14), fill=_MUTED)
-
+    # ── Блок: Факт часов ────────────────────────────────────────────────────
+    _rrect(draw, [PAD, y, W-PAD, y+68], CARD)
+    _icon_clock(draw, PAD+30, y+34)
+    draw.text((PAD+54, y+18), "ФАКТ ЧАСОВ", font=_BOLD(13), fill=MUTED)
+    draw.text((W-PAD-12, y+10), str(data.get("fact", "—")),
+              font=_BOLD(34), fill=GREEN, anchor="ra")
     y += 80
 
-    # ── Бейдж роли ──────────────────────────────────────────────────────────
-    role_label = "👔  Администратор" if role == "admin" else "🖨  МФУ"
-    badge_w = 155 if role == "admin" else 100
-    _rrect(draw, [_PAD, y, _PAD + badge_w, y + 26], _BADGE, radius=8)
-    draw.text((_PAD + 10, y + 5), role_label, font=_fnt(False, 13), fill=_ACCENT)
-
-    y += 44
-
-    _hline(draw, y); y += 16
-
-    # ── ФАКТ ЧАСОВ ──────────────────────────────────────────────────────────
-    fact = data.get("fact", "—")
-    draw.text((_PAD, y), "⏱  Факт часов", font=_fnt(True, 15), fill=_MUTED)
-    draw.text((_W - _PAD, y), str(fact),
-              font=_fnt(True, 22), fill=_SUCCESS, anchor="ra")
-    y += 38
-
-    _hline(draw, y); y += 16
-
-    # ── ЛИМИТЫ (только для admin) ───────────────────────────────────────────
+    # ── Блок: Лимиты (только admin) ─────────────────────────────────────────
     if role == "admin":
-        y = _section_label(draw, y, "📊  ЛИМИТЫ")
-        y = _mini_blocks(draw, y, [
-            ("Открыто",     data.get("open_limits", "—"),  _WARN),
-            ("План",        data.get("plan_limits", "—"),   _MUTED),
-            ("Выполнение",  data.get("execution", "—"),     _SUCCESS),
-        ])
-        _hline(draw, y); y += 16
+        _rrect(draw, [PAD, y, W-PAD, y+90], CARD)
+        _icon_chart(draw, PAD+30, y+38)
+        draw.text((PAD+54, y+14), "ЛИМИТЫ", font=_BOLD(13), fill=MUTED)
 
-    # ── КАРТЫ ───────────────────────────────────────────────────────────────
-    y = _section_label(draw, y, "💳  КАРТЫ")
-    y = _kv_row(draw, y, "   Виртуальные", str(data.get("virtual_cards", "—")))
-    y = _kv_row(draw, y, "   Пластиковые", str(data.get("plastic_cards", "—")))
+        ratio = f"{data.get('open_limits','—')} / {data.get('plan_limits','—')}"
+        draw.text((PAD+54, y+34), ratio, font=_BOLD(26), fill=GREEN)
+        draw.text((PAD+54, y+66), "Открыто / План", font=_REG(13), fill=MUTED)
 
-    y += 4
-    _hline(draw, y); y += 16
+        ec = _exec_color(data.get("execution", "0"))
+        draw.text((W-PAD-12, y+28), str(data.get("execution", "—")),
+                  font=_BOLD(30), fill=ec, anchor="ra")
+        draw.text((W-PAD-12, y+64), "Выполнение", font=_REG(13), fill=MUTED, anchor="ra")
+        y += 102
 
-    # ── ВЧЛ ─────────────────────────────────────────────────────────────────
-    vchl = str(data.get("vchl", "—"))
-    draw.text((_PAD, y), "🎥  ВЧЛ", font=_fnt(True, 15), fill=_MUTED)
-    draw.text((_W - _PAD, y), vchl,
-              font=_fnt(True, 20), fill=_SUCCESS, anchor="ra")
-    y += 34
+    # ── Блок: Карты ─────────────────────────────────────────────────────────
+    _rrect(draw, [PAD, y, W-PAD, y+90], CARD)
+    _icon_card(draw, PAD+30, y+38)
+    draw.text((PAD+54, y+14), "КАРТЫ", font=_BOLD(13), fill=MUTED)
 
-    _hline(draw, y); y += 14
+    mid = W // 2
+    draw.text((mid-40, y+34), str(data.get("virtual_cards", "—")), font=_BOLD(30), fill=WHITE)
+    draw.text((mid-40, y+66), "Виртуальные", font=_REG(13), fill=MUTED)
+    draw.text((W-PAD-12, y+34), str(data.get("plastic_cards", "—")),
+              font=_BOLD(30), fill=WHITE, anchor="ra")
+    draw.text((W-PAD-12, y+66), "Пластиковые", font=_REG(13), fill=MUTED, anchor="ra")
+    y += 102
 
-    # ── Footer ──────────────────────────────────────────────────────────────
-    draw.text((_W // 2, y + 10), "AdminStats · YandexTaxi",
-              font=_fnt(False, 12), fill=(55, 63, 90), anchor="mm")
+    # ── Блок: ВЧЛ ───────────────────────────────────────────────────────────
+    _rrect(draw, [PAD, y, W-PAD, y+68], CARD)
+    _icon_play(draw, PAD+30, y+34)
+    draw.text((PAD+54, y+18), "ВЧЛ", font=_BOLD(13), fill=MUTED)
 
-    y += 36
+    vchl_val   = str(data.get("vchl", "—"))
+    vchl_color = _exec_color(vchl_val)
+    is_100     = vchl_val.strip() in ("100%", "100")
+    vx = W-PAD-50 if is_100 else W-PAD-12
+    draw.text((vx, y+10), vchl_val, font=_BOLD(34), fill=vchl_color, anchor="ra")
+    if is_100:
+        _checkmark(draw, W-PAD-22, y+34)
+    y += 80
 
-    # ── Обрезаем по реальной высоте ─────────────────────────────────────────
-    img = img.crop((0, 0, _W, y + 20))
+    # Footer
+    y += 8
+    draw.text((W//2, y+10), "AdminStats  •  @PZStatsBot",
+              font=_REG(12), fill=(55, 65, 90), anchor="mm")
+    y += 32
 
+    img = img.crop((0, 0, W, y+12))
     buf = io.BytesIO()
     img.save(buf, format="PNG", optimize=True)
     buf.seek(0)
