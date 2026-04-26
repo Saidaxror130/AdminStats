@@ -1,7 +1,6 @@
-import sys
-import os
-sys.path.insert(0, os.path.dirname(__file__))
-
+# import sys
+# import os
+# sys.path.insert(0, os.path.dirname(__file__))
 import logging
 from telegram.ext import (
     ApplicationBuilder,
@@ -51,7 +50,10 @@ if __name__ == "__main__":
         entry_points=[CommandHandler("start", start)],
         states={
             SELECT_ROLE: [CallbackQueryHandler(select_role)],
-            ENTER_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_id)],
+            ENTER_ID: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, enter_id),
+                CallbackQueryHandler(select_role, pattern="^new_search$"),
+            ],
         },
         fallbacks=[CommandHandler("start", start)],
     )
@@ -64,5 +66,7 @@ if __name__ == "__main__":
         f"Интервал кэша: {CACHE_TTL_SECONDS // 60} мин\n"
         f"Лимит запросов: {RATE_LIMIT_MAX} за {RATE_LIMIT_WINDOW} сек"
     )
+
+    application.run_polling()
 
     application.run_polling()
