@@ -1,3 +1,4 @@
+import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
@@ -6,6 +7,7 @@ from cache import (
     send_admin_message, _user_searched_ids,
 )
 from utils.helpers import fmt_dt, normalize_id
+from session_cache import get_role, set_role, clear_role
 import cache as c
 
 # ================= STATES =================
@@ -13,26 +15,105 @@ import cache as c
 SELECT_ROLE, ENTER_ID = range(2)
 
 
+# ================= KEYBOARDS =================
+
+def role_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("👔  Администратор", callback_data="admin")],
+        [InlineKeyboardButton("🖨  МФУ",           callback_data="mfu")],
+    ])
+
+def new_search_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔍  Новый поиск", callback_data="new_search")],
+    ])
+
+
+# ================= FORMATTERS =================
+
+def format_card_admin(data: dict) -> str:
+    return (
+        f"👤  <b>{data['fio']}</b>\n"
+        f"🏢  <b>ПВЗ:</b> {data['pvz']}\n"
+        f"━━━━━━━━━━━━━━━━━━━\n"
+        f"⏱  <b>Факт часов:</b>  {data['fact']}\n"
+        f"━━━━━━━━━━━━━━━━━━━\n"
+        f"📊  <b>Лимиты</b>\n"
+        f"   Открыто:       {data['open_limits']}\n"
+        f"   План:           {data['plan_limits']}\n"
+        f"   Выполнение:  {data['execution']}\n"
+        f"━━━━━━━━━━━━━━━━━━━\n"
+        f"💳  <b>Карты</b>\n"
+        f"   Виртуальные:  {data['virtual_cards']}\n"
+        f"   Пластиковые:  {data['plastic_cards']}\n"
+        f"━━━━━━━━━━━━━━━━━━━\n"
+        f"🎥  <b>ВЧЛ:</b>  {data['vchl']}"
+    )
+
+
+def format_card_mfu(data: dict) -> str:
+    return (
+        f"👤  <b>{data['fio']}</b>\n"
+        f"🏢  <b>ПВЗ:</b> {data['pvz']}\n"
+        f"━━━━━━━━━━━━━━━━━━━\n"
+        f"⏱  <b>Факт часов:</b>  {data['fact']}\n"
+        f"━━━━━━━━━━━━━━━━━━━\n"
+        f"💳  <b>Карты</b>\n"
+        f"   Виртуальные:  {data['virtual_cards']}\n"
+        f"   Пластиковые:  {data['plastic_cards']}\n"
+        f"━━━━━━━━━━━━━━━━━━━\n"
+        f"🎥  <b>ВЧЛ:</b>  {data['vchl']}"
+    )
+
+
+# ================= VALIDATION =================
+
+def validate_employee_id(text: str) -> tuple[bool, str]:
+    cleaned = text.strip().replace(" ", "").replace("\xa0", "")
+
+    if not cleaned:
+        return False, "Вы отправили пустое сообщение.\n\nВведите табельный номер (3–6 цифр):"
+
+    if not cleaned.isdigit():
+        non_digits = [ch for ch in cleaned if not ch.isdigit()]
+        example = "".join(non_digits[:3])
+        return False, (
+            f"Табельный номер состоит только из цифр.\n"
+            f"Лишние символы: <code>{example}</code>\n\n"
+            f"Попробуйте ещё раз:"
+        )
+
+    if len(cleaned) < 3:
+        return False, f"Слишком короткий номер: <b>{len(cleaned)} цифры</b>. Должно быть от 3 до 6.\n\nПопробуйте ещё раз:"
+
+    if len(cleaned) > 6:
+        return False, f"Слишком длинный номер: <b>{len(cleaned)} цифр</b>. Должно быть не более 6.\n\nПопробуйте ещё раз:"
+
+    return True, ""
+
+
 # ================= HANDLERS =================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    _user_searched_ids[update.effective_user.id] = set()
+    user = update.effective_user
 
-    keyboard = [
-        [InlineKeyboardButton("Админ", callback_data="admin")],
-        [InlineKeyboardButton("МФУ", callback_data="mfu")],
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    _user_searched_ids[user.id] = set()
+    clear_role(user.id)
 
     if c._last_refresh:
-        cache_info = f"\n\n🕐 Последнее обновление: {fmt_dt(c._last_refresh)}"
+        status_line = f"🟢 Данные обновлены: {fmt_dt(c._last_refresh)}"
     else:
-        cache_info = "\n\n⏳ Данные загружаются..."
+        status_line = "🟡 Данные загружаются, подождите немного..."
+
+    name = user.first_name or "друг"
 
     await update.message.reply_text(
-        f"Привет! Я бот для просмотра показателей сотрудников.{cache_info}\n\n"
-        f"Выберите вашу должность:",
-        reply_markup=reply_markup,
+        f"Привет, {name}! 👋\n\n"
+        f"Я помогу тебе быстро узнать свои рабочие показатели — "
+        f"факт часов, карты, лимиты и ВЧЛ.\n\n"
+        f"{status_line}\n\n"
+        f"Выберите свою должность:",
+        reply_markup=role_keyboard(),
     )
     return SELECT_ROLE
 
@@ -40,9 +121,30 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def select_role(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    role = query.data
+
+    data = query.data
+
+    if data == "new_search":
+        role = get_role(query.from_user.id)
+        if not role:
+            await query.edit_message_text(
+                "Сессия устарела. Нажмите /start чтобы начать заново."
+            )
+            return SELECT_ROLE
+        role_label = "Администратор" if role == "admin" else "МФУ"
+        await query.edit_message_text(
+            f"🔍 Поиск ({role_label})\n\nВведите табельный номер:"
+        )
+        return ENTER_ID
+
+    role = data
+    set_role(query.from_user.id, role)
     context.user_data["role"] = role
-    await query.edit_message_text("Введите табельный номер:")
+
+    role_label = "Администратор" if role == "admin" else "МФУ"
+    await query.edit_message_text(
+        f"🔍 Поиск ({role_label})\n\nВведите табельный номер:"
+    )
     return ENTER_ID
 
 
@@ -57,14 +159,19 @@ async def enter_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return ENTER_ID
 
-        if not user_text.isdigit() or len(user_text) < 3 or len(user_text) > 6:
-            await update.message.reply_text(
-                "❌ Табельный номер должен содержать только цифры.\n\nВведите табельный номер:"
-            )
+        ok, err_msg = validate_employee_id(user_text)
+        if not ok:
+            await update.message.reply_text(err_msg, parse_mode="HTML")
             return ENTER_ID
 
         employee_id = normalize_id(user_text)
-        role = context.user_data.get("role")
+        role = get_role(user.id) or context.user_data.get("role")
+
+        if not role:
+            await update.message.reply_text(
+                "Не удалось определить вашу роль. Нажмите /start чтобы начать заново."
+            )
+            return SELECT_ROLE
 
         data = find_employee_in_cache(employee_id, role)
 
@@ -77,58 +184,38 @@ async def enter_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         if data:
-            if role == "admin":
-                text = (
-                    f"👤<b>ФИО:</b> {data['fio']}\n"
-                    f"🏢<b>ПВЗ:</b> {data['pvz']}\n\n"
-                    f"<b>Факт часов:</b> {data['fact']} ⏱️\n\n"
-                    f"<b>Кол. открытых лимитов:</b> {data['open_limits']} 📊\n"
-                    f"<b>План по лимитам:</b> {data['plan_limits']} 📋\n"
-                    f"<b>Выполнение плана:</b> {data['execution']} 📈\n\n"
-                    f"<b>Виртуальные карты:</b> {data['virtual_cards']} 💷\n"
-                    f"<b>Пластиковые карты:</b> {data['plastic_cards']} 💳\n\n"
-                    f"🎥<b>ВЧЛ:</b> {data['vchl']}\n\n"
-                    f"<u><b>Выберите должность для нового поиска:</b></u>"
-                )
-            else:
-                text = (
-                    f"👤<b>ФИО:</b> {data['fio']}\n"
-                    f"🏢<b>ПВЗ:</b> {data['pvz']}\n\n"
-                    f"<b>Факт часов:</b> {data['fact']} ⏱️\n\n"
-                    f"<b>ВИРТУАЛЬНЫЕ карты:</b> {data['virtual_cards']} 💷\n"
-                    f"<b>ПЛАСТИКОВЫЕ карты:</b> {data['plastic_cards']} 💳\n\n"
-                    f"🎥<b>ВЧЛ:</b> {data['vchl']}\n\n"
-                    f"<u>Выберите должность для нового поиска:</u>"
-                )
-
-            keyboard = [
-                [InlineKeyboardButton("Админ", callback_data="admin")],
-                [InlineKeyboardButton("МФУ", callback_data="mfu")],
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            await update.message.reply_text(text, parse_mode="HTML", reply_markup=reply_markup)
+            text = format_card_admin(data) if role == "admin" else format_card_mfu(data)
+            await update.message.reply_text(
+                text,
+                parse_mode="HTML",
+                reply_markup=new_search_keyboard(),
+            )
             return SELECT_ROLE
 
         else:
             if c._last_refresh is None:
-                note = "\n\n⏳ Кэш ещё загружается, попробуйте через минуту."
+                note = "⏳ Кэш ещё загружается — попробуйте через минуту."
             else:
-                note = f"\n\n🕐 Последнее обновление: {fmt_dt(c._last_refresh)}"
+                note = f"🕐 Данные актуальны на: {fmt_dt(c._last_refresh)}"
 
             await update.message.reply_text(
-                f"❌ Табельный номер не найден.{note}\n\nВведите табельный номер:"
+                f"❌ Табельный номер <code>{employee_id}</code> не найден.\n\n"
+                f"{note}\n\n"
+                f"Проверьте номер и попробуйте ещё раз:",
+                parse_mode="HTML",
             )
             return ENTER_ID
 
     except Exception as e:
-        import logging
         error = (
             f"🚨 Ошибка обработки запроса\n\n"
-            f"User:\n{update.effective_user.id}\n\n"
-            f"Сообщение:\n{update.message.text}\n\n"
-            f"Ошибка:\n{e}"
+            f"User: {update.effective_user.id}\n"
+            f"Сообщение: {update.message.text}\n"
+            f"Ошибка: {e}"
         )
         logging.error(error)
         send_admin_message(error)
-        await update.message.reply_text("Произошла ошибка!\n\nПопробуйте снова. /start")
+        await update.message.reply_text(
+            "Что-то пошло не так. Попробуйте ещё раз или нажмите /start"
+        )
         return SELECT_ROLE
