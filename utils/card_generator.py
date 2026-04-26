@@ -21,7 +21,7 @@ WHITE   = (235, 242, 255)
 MUTED   = (140, 155, 190)
 W       = 520
 PAD     = 24
-ICON    = (90, 200, 140)
+ICON = (90, 200, 140)
 
 
 def _rrect(draw, xy, fill, r=18):
@@ -74,30 +74,10 @@ def _checkmark(draw, cx, cy, r=16):
         draw.line([pts[i], pts[i+1]], fill=GREEN, width=3)
 
 
-
-def _shadow(draw, xy, r=18):
-    x1, y1, x2, y2 = xy
-    draw.rounded_rectangle(
-        [x1+2, y1+4, x2+2, y2+4],
-        radius=r,
-        fill=(10, 12, 18)
-    )
-
 # ── Главная функция ──────────────────────────────────────────────────────────
 
 def generate_card(data: dict, role: str) -> bytes:
-    def _gradient(h):
-        img = Image.new("RGB", (W, h), BG)
-        px = img.load()
-        for y in range(h):
-            t = y / h
-            r = int(18 + t * 8)
-            g = int(20 + t * 10)
-            b = int(28 + t * 18)
-            for x in range(W):
-                px[x, y] = (r, g, b)
-        return img
-    img = _gradient(820)
+    img  = Image.new("RGB", (W, 820), BG)
     draw = ImageDraw.Draw(img)
     y    = PAD
 
@@ -133,7 +113,6 @@ def generate_card(data: dict, role: str) -> bytes:
     y += 50
 
     # ── Блок: Факт часов ────────────────────────────────────────────────────
-    _shadow(draw, [PAD, y, W-PAD, y+68])
     _rrect(draw, [PAD, y, W-PAD, y+68], CARD)
     _icon_clock(draw, PAD+30, y+34)
     draw.text((PAD+54, y+18), "ФАКТ ЧАСОВ", font=_BOLD(13), fill=MUTED)
@@ -143,8 +122,7 @@ def generate_card(data: dict, role: str) -> bytes:
 
     # ── Блок: Лимиты (только admin) ─────────────────────────────────────────
     if role == "admin":
-        _shadow(draw, [PAD, y, W-PAD, y+68])
-        _rrect(draw, [PAD, y, W-PAD, y+68], CARD)
+        _rrect(draw, [PAD, y, W-PAD, y+90], CARD)
         _icon_chart(draw, PAD+30, y+38)
         draw.text((PAD+54, y+14), "ЛИМИТЫ", font=_BOLD(13), fill=MUTED)
 
@@ -159,13 +137,12 @@ def generate_card(data: dict, role: str) -> bytes:
         y += 102
 
     # ── Блок: Карты ─────────────────────────────────────────────────────────
-    _shadow(draw, [PAD, y, W-PAD, y+68])
-    _rrect(draw, [PAD, y, W-PAD, y+68], CARD)
+    _rrect(draw, [PAD, y, W-PAD, y+90], CARD)
     _icon_card(draw, PAD+30, y+38)
     draw.text((PAD+54, y+14), "КАРТЫ", font=_BOLD(13), fill=MUTED)
 
     mid = W // 2
-    draw.text((mid-40, y+34), str(data.get("virtual_cards", "—")), font=_BOLD(30), anchor="mm", fill=WHITE)
+    draw.text((mid-40, y+34), str(data.get("virtual_cards", "—")), font=_BOLD(30), fill=WHITE)
     draw.text((mid-40, y+66), "Виртуальные", font=_REG(13), fill=MUTED)
     draw.text((W-PAD-12, y+34), str(data.get("plastic_cards", "—")),
               font=_BOLD(30), fill=WHITE, anchor="ra")
@@ -173,7 +150,6 @@ def generate_card(data: dict, role: str) -> bytes:
     y += 102
 
     # ── Блок: ВЧЛ ───────────────────────────────────────────────────────────
-    _shadow(draw, [PAD, y, W-PAD, y+68])
     _rrect(draw, [PAD, y, W-PAD, y+68], CARD)
     _icon_play(draw, PAD+30, y+34)
     draw.text((PAD+54, y+18), "ВЧЛ", font=_BOLD(13), fill=MUTED)
@@ -185,10 +161,6 @@ def generate_card(data: dict, role: str) -> bytes:
     draw.text((vx, y+10), vchl_val, font=_BOLD(34), fill=vchl_color, anchor="ra")
     if is_100:
         _checkmark(draw, W-PAD-22, y+34)
-        draw.ellipse(
-            [W-PAD-32, y+20, W-PAD-12, y+48],
-            outline=(80, 255, 160)
-        )
     y += 80
 
     # Footer
