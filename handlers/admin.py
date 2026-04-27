@@ -3,10 +3,9 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from config import ADMIN_ID, CACHE_TTL_SECONDS, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW, SUSPICIOUS_DIFF_IDS
-from cache import (
-    refresh_cache, _last_refresh, _cache_stats,
-    _request_log, _log_lock,
-)
+from utils.cache_manager import refresh_cache, get_cache_stats, get_last_refresh
+from utils.request_logger import get_request_log
+from utils.admin_notifier import send_admin_message
 from utils.helpers import now_tashkent, fmt_dt
 
 
@@ -21,16 +20,16 @@ async def cmd_refresh(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("🔄 Обновляю кэш, подождите...")
 
-    t = threading.Thread(target=lambda: refresh_cache(notify_admin=False), daemon=True)
+    t = threading.Thread(target=lambda: refresh_cache(notify_callback=send_admin_message), daemon=True)
     t.start()
     t.join(timeout=120)
 
-    import cache as c
-    if c._last_refresh:
-        s = c._cache_stats
+    last_refresh = get_last_refresh()
+    if last_refresh:
+        s = get_cache_stats()
         await update.message.reply_text(
             f"✅ Кэш обновлён!\n\n"
-            f"🕐 Время: {fmt_dt(c._last_refresh)}\n"
+            f"🕐 Время: {fmt_dt(last_refresh)}\n"
             f"📋 Таблиц: {s['sheet_count']}\n"
             f"❌ Ошибок: {s['errors']}\n"
             f"👤 Записей Админ: {s['total_admin']}\n"
@@ -45,11 +44,11 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ У вас нет доступа к этой команде.")
         return
 
-    import cache as c
-    s = c._cache_stats
+    s = get_cache_stats()
+    last_refresh = get_last_refresh()
 
-    if c._last_refresh:
-        age = now_tashkent() - c._last_refresh
+    if last_refresh:
+        age = now_tashkent() - last_refresh
         minutes = int(age.total_seconds() // 60)
         seconds = int(age.total_seconds() % 60)
         age_str = f"{minutes} мин {seconds} сек назад"
@@ -59,8 +58,7 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         age_str = "ещё не обновлялся"
         next_str = "скоро"
 
-    with c._log_lock:
-        log_copy = list(c._request_log)
+    log_copy = get_request_log()
 
     unique_users = len(set(e["user_id"] for e in log_copy))
     total_requests = len(log_copy)
@@ -91,9 +89,7 @@ async def cmd_logs(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ У вас нет доступа к этой команде.")
         return
 
-    import cache as c
-    with c._log_lock:
-        log_copy = list(c._request_log)
+    log_copy = get_request_log()
 
     if not log_copy:
         await update.message.reply_text("📭 Лог пустой — запросов ещё не было.")

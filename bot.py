@@ -13,9 +13,14 @@ from telegram.ext import (
 )
 
 from config import TOKEN, CACHE_TTL_SECONDS, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW
-from cache import start_cache_refresh_thread, send_admin_message
+from utils.cache_manager import start_cache_refresh_loop
+from utils.admin_notifier import send_admin_message
 from handlers.admin import cmd_refresh, cmd_status, cmd_logs
 from handlers.user import start, select_role, enter_id, SELECT_ROLE, ENTER_ID
+from handlers.admin_search import (
+    cmd_asearch, enter_name, select_employee,
+    ENTER_NAME, SELECT_EMPLOYEE
+)
 
 # ================= LOGGING =================
 logging.basicConfig(
@@ -38,7 +43,7 @@ async def error_handler(update, context):
 # ================= MAIN =================
 
 if __name__ == "__main__":
-    start_cache_refresh_thread()
+    start_cache_refresh_loop(notify_callback=send_admin_message)
 
     application = ApplicationBuilder().token(TOKEN).build()
 
@@ -47,6 +52,18 @@ if __name__ == "__main__":
     application.add_handler(CommandHandler("status", cmd_status))
     application.add_handler(CommandHandler("logs", cmd_logs))
 
+    # Админский поиск по имени
+    asearch_handler = ConversationHandler(
+        entry_points=[CommandHandler("asearch", cmd_asearch)],
+        states={
+            ENTER_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_name)],
+            SELECT_EMPLOYEE: [CallbackQueryHandler(select_employee)],
+        },
+        fallbacks=[CommandHandler("asearch", cmd_asearch)],
+    )
+    application.add_handler(asearch_handler)
+
+    # Пользовательский поиск по табельному
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={

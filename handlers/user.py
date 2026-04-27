@@ -2,14 +2,13 @@ import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
-from cache import (
-    find_employee_in_cache, check_rate_limit, log_request,
-    send_admin_message, _user_searched_ids,
-)
+from utils.cache_manager import find_employee_in_cache, get_last_refresh
+from utils.rate_limiter import check_rate_limit
+from utils.request_logger import log_request, clear_user_searches
+from utils.admin_notifier import send_admin_message
 from utils.helpers import fmt_dt, normalize_id
 from session_cache import get_role, set_role, clear_role
 from utils.card_generator import generate_card
-import cache as c
 
 # ================= STATES =================
 
@@ -99,11 +98,12 @@ def validate_employee_id(text: str) -> tuple[bool, str]:
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
 
-    _user_searched_ids[user.id] = set()
+    clear_user_searches(user.id)
     clear_role(user.id)
 
-    if c._last_refresh:
-        status_line = f"🟢 Данные обновлены: {fmt_dt(c._last_refresh)}"
+    last_refresh = get_last_refresh()
+    if last_refresh:
+        status_line = f"🟢 Данные обновлены: {fmt_dt(last_refresh)}"
     else:
         status_line = "🟡 Данные загружаются, подождите немного..."
 
@@ -203,6 +203,7 @@ async def enter_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
             employee_id=employee_id,
             role=role,
             found=data is not None,
+            alert_callback=send_admin_message,
         )
 
         if data:
@@ -218,10 +219,11 @@ async def enter_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return SELECT_ROLE
 
         else:
-            if c._last_refresh is None:
+            last_refresh = get_last_refresh()
+            if last_refresh is None:
                 note = "⏳ Кэш ещё загружается — попробуйте через минуту."
             else:
-                note = f"🕐 Данные актуальны на: {fmt_dt(c._last_refresh)}"
+                note = f"🕐 Данные актуальны на: {fmt_dt(last_refresh)}"
 
             await update.message.reply_text(
                 f"❌ Табельный номер <code>{employee_id}</code> не найден.\n\n"
