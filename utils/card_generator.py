@@ -10,6 +10,8 @@ from PIL import Image, ImageDraw, ImageFont
 _FONT_DIR = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..", "assets", "fonts")
 _REG  = lambda s: ImageFont.truetype(_os.path.join(_FONT_DIR, "DejaVuSans.ttf"), s)
 _BOLD = lambda s: ImageFont.truetype(_os.path.join(_FONT_DIR, "DejaVuSans-Bold.ttf"), s)
+ICON_DIR = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..", "assets", "icons")
+
 
 BG      = (18,  20,  28)
 SURFACE = (28,  32,  44)
@@ -23,6 +25,9 @@ W       = 520
 PAD     = 24
 ICON = (90, 200, 140)
 
+def _load_icon(name, size=28):
+    icon = Image.open(_os.path.join(ICON_DIR, name)).convert("RGBA")
+    return icon.resize((size, size))
 
 def _rrect(draw, xy, fill, r=18):
     draw.rounded_rectangle(list(xy), radius=r, fill=fill)
@@ -38,40 +43,6 @@ def _exec_color(val):
 
 def _initials(name: str) -> str:
     return "".join(p[0] for p in name.split() if p)[:2].upper()
-
-
-# ── Иконки (чистая геометрия, без emoji) ────────────────────────────────────
-
-def _icon_clock(draw, cx, cy, r=14):
-    draw.ellipse([cx-r, cy-r, cx+r, cy+r], outline=ICON, width=2)
-    draw.line([cx, cy, cx, cy-r+4], fill=ICON, width=2)
-    draw.line([cx, cy, cx+r-5, cy+3], fill=ICON, width=2)
-    draw.ellipse([cx-2, cy-2, cx+2, cy+2], fill=ICON)
-
-
-def _icon_chart(draw, cx, cy, r=13):
-    bw = 5
-    for x, h in zip([cx-9, cx-2, cx+5], [8, 13, 10]):
-        draw.rectangle([x, cy+r-h, x+bw, cy+r], fill=ICON)
-    draw.line([cx-r, cy+r+1, cx+r, cy+r+1], fill=ICON, width=1)
-
-
-def _icon_card(draw, cx, cy, r=13):
-    draw.rounded_rectangle([cx-r, cy-8, cx+r, cy+8], radius=3, outline=ICON, width=2)
-    draw.line([cx-r+2, cy-2, cx+r-2, cy-2], fill=ICON, width=3)
-
-
-def _icon_play(draw, cx, cy, r=13):
-    draw.ellipse([cx-r, cy-r, cx+r, cy+r], outline=ICON, width=2)
-    draw.polygon([cx-4, cy-7, cx-4, cy+7, cx+8, cy], fill=ICON)
-
-
-def _checkmark(draw, cx, cy, r=16):
-    draw.ellipse([cx-r, cy-r, cx+r, cy+r], outline=GREEN, width=2)
-    # галочка
-    pts = [(cx-8, cy), (cx-2, cy+7), (cx+9, cy-7)]
-    for i in range(len(pts)-1):
-        draw.line([pts[i], pts[i+1]], fill=GREEN, width=3)
 
 
 # ── Главная функция ──────────────────────────────────────────────────────────
@@ -114,7 +85,8 @@ def generate_card(data: dict, role: str) -> bytes:
 
     # ── Блок: Факт часов ────────────────────────────────────────────────────
     _rrect(draw, [PAD, y, W-PAD, y+68], CARD)
-    _icon_clock(draw, PAD+30, y+34)
+    icon = _load_icon("clock.png", 28)
+    img.paste(icon, (PAD+16, y+20), icon)
     draw.text((PAD+54, y+18), "ФАКТ ЧАСОВ", font=_BOLD(13), fill=MUTED)
     draw.text((W-PAD-12, y+10), str(data.get("fact", "—")),
               font=_BOLD(34), fill=GREEN, anchor="ra")
@@ -123,7 +95,8 @@ def generate_card(data: dict, role: str) -> bytes:
     # ── Блок: Лимиты (только admin) ─────────────────────────────────────────
     if role == "admin":
         _rrect(draw, [PAD, y, W-PAD, y+90], CARD)
-        _icon_chart(draw, PAD+30, y+38)
+        icon = _load_icon("chart.png", 28)
+        img.paste(icon, (PAD+16, y+24), icon)
         draw.text((PAD+54, y+14), "ЛИМИТЫ", font=_BOLD(13), fill=MUTED)
 
         ratio = f"{data.get('open_limits','—')} / {data.get('plan_limits','—')}"
@@ -138,7 +111,8 @@ def generate_card(data: dict, role: str) -> bytes:
 
     # ── Блок: Карты ─────────────────────────────────────────────────────────
     _rrect(draw, [PAD, y, W-PAD, y+90], CARD)
-    _icon_card(draw, PAD+30, y+38)
+    icon = _load_icon("card.png", 28)
+    img.paste(icon, (PAD+16, y+24), icon)
     draw.text((PAD+54, y+14), "КАРТЫ", font=_BOLD(13), fill=MUTED)
 
     mid = W // 2
@@ -151,7 +125,8 @@ def generate_card(data: dict, role: str) -> bytes:
 
     # ── Блок: ВЧЛ ───────────────────────────────────────────────────────────
     _rrect(draw, [PAD, y, W-PAD, y+68], CARD)
-    _icon_play(draw, PAD+30, y+34)
+    icon = _load_icon("play.png", 28)
+    img.paste(icon, (PAD+16, y+20), icon)
     draw.text((PAD+54, y+18), "ВЧЛ", font=_BOLD(13), fill=MUTED)
 
     vchl_val   = str(data.get("vchl", "—"))
@@ -160,7 +135,8 @@ def generate_card(data: dict, role: str) -> bytes:
     vx = W-PAD-50 if is_100 else W-PAD-12
     draw.text((vx, y+10), vchl_val, font=_BOLD(34), fill=vchl_color, anchor="ra")
     if is_100:
-        _checkmark(draw, W-PAD-22, y+34)
+        icon = _load_icon("check.png", 32)
+        img.paste(icon, (W-PAD-42, y+18), icon)
     y += 80
 
     # Footer
