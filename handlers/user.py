@@ -36,18 +36,18 @@ def format_card_admin(data: dict) -> str:
     return (
         f"👤  <b>{data['fio']}</b>\n"
         f"🏢  <b>ПВЗ:</b> {data['pvz']}\n"
-        f"━━━━━━━━━━━━━━━━━━━\n"
+        f"━━━━━━━━━━━━━━━\n"
         f"⏱  <b>Факт часов:</b>  {data['fact']}\n"
-        f"━━━━━━━━━━━━━━━━━━━\n"
+        f"━━━━━━━━━━━━━━━\n"
         f"📊  <b>Лимиты</b>\n"
         f"   Открыто:       {data['open_limits']}\n"
         f"   План:           {data['plan_limits']}\n"
         f"   Выполнение:  {data['execution']}\n"
-        f"━━━━━━━━━━━━━━━━━━━\n"
+        f"━━━━━━━━━━━━━━━\n"
         f"💳  <b>Карты</b>\n"
         f"   Виртуальные:  {data['virtual_cards']}\n"
         f"   Пластиковые:  {data['plastic_cards']}\n"
-        f"━━━━━━━━━━━━━━━━━━━\n"
+        f"━━━━━━━━━━━━━━━\n"
         f"🎥  <b>ВЧЛ:</b>  {data['vchl']}"
     )
 
@@ -56,13 +56,13 @@ def format_card_mfu(data: dict) -> str:
     return (
         f"👤  <b>{data['fio']}</b>\n"
         f"🏢  <b>ПВЗ:</b> {data['pvz']}\n"
-        f"━━━━━━━━━━━━━━━━━━━\n"
+        f"━━━━━━━━━━━━━━━\n"
         f"⏱  <b>Факт часов:</b>  {data['fact']}\n"
-        f"━━━━━━━━━━━━━━━━━━━\n"
+        f"━━━━━━━━━━━━━━━\n"
         f"💳  <b>Карты</b>\n"
         f"   Виртуальные:  {data['virtual_cards']}\n"
         f"   Пластиковые:  {data['plastic_cards']}\n"
-        f"━━━━━━━━━━━━━━━━━━━\n"
+        f"━━━━━━━━━━━━━━━\n"
         f"🎥  <b>ВЧЛ:</b>  {data['vchl']}"
     )
 
