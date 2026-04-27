@@ -209,3 +209,62 @@ def search_employees_by_name(search_query: str) -> list:
 
     logging.info(f"✅ Найдено {len(results)} сотрудников")
     return results
+
+
+def search_employees_by_pvz(pvz_query: str) -> list:
+    """
+    Ищет всех сотрудников конкретного ПВЗ по точному совпадению номера.
+
+    Args:
+        pvz_query: название ПВЗ (например: "ТАШ-5", "Таш-5", "tash-5")
+
+    Returns:
+        список словарей с данными найденных сотрудников
+        [{"fio": "...", "employee_id": "...", "pvz": "...", "role": "admin/mfu"}, ...]
+    """
+    from utils.helpers import normalize_id, normalize_pvz, extract_pvz_number
+
+    if not pvz_query:
+        return []
+
+    # Нормализуем запрос
+    normalized_query = normalize_pvz(pvz_query)
+    query_number = extract_pvz_number(normalized_query)
+
+    if not query_number:
+        logging.warning(f"Не удалось извлечь номер из запроса: {pvz_query}")
+        return []
+
+    logging.info(f"🔍 Поиск сотрудников ПВЗ: {normalized_query} (номер: {query_number})")
+
+    results = []
+
+    with _cache_lock:
+        cache_copy = {"admin": dict(_cache["admin"]), "mfu": dict(_cache["mfu"])}
+
+    for role in ("admin", "mfu"):
+        for spreadsheet_id, records in cache_copy[role].items():
+            for row in records:
+                pvz_name = row.get("ПВЗ", "")
+                if not pvz_name:
+                    continue
+
+                # Нормализуем ПВЗ из таблицы
+                normalized_pvz = normalize_pvz(pvz_name)
+                pvz_number = extract_pvz_number(normalized_pvz)
+
+                # Сравниваем только номера (точное совпадение)
+                if pvz_number == query_number:
+                    employee_id = normalize_id(row.get("Табельный номер", ""))
+                    results.append({
+                        "fio": row.get("ФИО", "N/A"),
+                        "employee_id": employee_id,
+                        "pvz": pvz_name,  # Оригинальное название из таблицы
+                        "pvz_normalized": normalized_pvz,
+                        "role": role,
+                        "fact": row.get("Факт", "N/A"),
+                        "vchl": row.get("ВЧЛ", "N/A"),
+                    })
+
+    logging.info(f"✅ Найдено {len(results)} сотрудников в ПВЗ {normalized_query}")
+    return results

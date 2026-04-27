@@ -63,13 +63,13 @@ def format_employee_full(data: dict, role: str) -> str:
 async def cmd_asearch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Начало поиска сотрудника по имени."""
     if not is_admin(update):
-        await update.message.reply_text("❌ У вас нет доступа к этой команде.")
+        await update.message.reply_text("❌ Нет доступа к этой команде.")
         return ConversationHandler.END
 
     await update.message.reply_text(
         "🔍 <b>Поиск сотрудника по имени</b>\n\n"
-        "Введите имя или фамилию для поиска:\n"
-        "(например: SAID, AKBAR, RUSTAM)",
+        "Введи имя или фамилию:\n"
+        "<i>(например: SAID, AKBAR, RUSTAM)</i>",
         parse_mode="HTML"
     )
     return ENTER_NAME
@@ -80,11 +80,11 @@ async def enter_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     search_query = update.message.text.strip()
 
     if not search_query:
-        await update.message.reply_text("❌ Вы отправили пустое сообщение. Введите имя:")
+        await update.message.reply_text("❌ Пустое сообщение.\n\nВведи имя:")
         return ENTER_NAME
 
     if len(search_query) < 2:
-        await update.message.reply_text("❌ Слишком короткий запрос. Введите минимум 2 символа:")
+        await update.message.reply_text("❌ Слишком короткий запрос.\n\nВведи минимум 2 символа:")
         return ENTER_NAME
 
     results = search_employees_by_name(search_query)
@@ -105,8 +105,8 @@ async def enter_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Ограничиваем до 20 результатов
     if len(results) > 20:
         await update.message.reply_text(
-            f"⚠️ Найдено {len(results)} сотрудников. Слишком много результатов.\n"
-            f"Уточните запрос для более точного поиска."
+            f"⚠️ Найдено {len(results)} сотрудников — слишком много.\n\n"
+            f"Уточни запрос для более точного поиска."
         )
         return ENTER_NAME
 

@@ -21,6 +21,10 @@ from handlers.admin_search import (
     cmd_asearch, enter_name, select_employee,
     ENTER_NAME, SELECT_EMPLOYEE
 )
+from handlers.pvz_search import (
+    cmd_pvz, enter_pvz, select_employee_pvz,
+    ENTER_PVZ, SELECT_EMPLOYEE_PVZ
+)
 
 # ================= LOGGING =================
 logging.basicConfig(
@@ -63,6 +67,17 @@ if __name__ == "__main__":
     )
     application.add_handler(asearch_handler)
 
+    # Поиск по ПВЗ (для всех пользователей)
+    pvz_handler = ConversationHandler(
+        entry_points=[CommandHandler("pvz", cmd_pvz)],
+        states={
+            ENTER_PVZ: [MessageHandler(filters.TEXT & ~filters.COMMAND, enter_pvz)],
+            SELECT_EMPLOYEE_PVZ: [CallbackQueryHandler(select_employee_pvz)],
+        },
+        fallbacks=[CommandHandler("pvz", cmd_pvz)],
+    )
+    application.add_handler(pvz_handler)
+
     # Пользовательский поиск по табельному
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
@@ -72,6 +87,7 @@ if __name__ == "__main__":
                 MessageHandler(filters.TEXT & ~filters.COMMAND, enter_id),
                 CallbackQueryHandler(select_role, pattern="^new_search$"),
                 CallbackQueryHandler(select_role, pattern="^share_card$"),
+                CallbackQueryHandler(select_role, pattern="^cancel_search$"),
             ],
         },
         fallbacks=[CommandHandler("start", start)],

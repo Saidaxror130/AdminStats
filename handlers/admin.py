@@ -15,10 +15,10 @@ def is_admin(update: Update) -> bool:
 
 async def cmd_refresh(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update):
-        await update.message.reply_text("❌ У вас нет доступа к этой команде.")
+        await update.message.reply_text("❌ Нет доступа к этой команде.")
         return
 
-    await update.message.reply_text("🔄 Обновляю кэш, подождите...")
+    await update.message.reply_text("🔄 Обновляю кэш, подожди...")
 
     t = threading.Thread(target=lambda: refresh_cache(notify_callback=send_admin_message), daemon=True)
     t.start()
@@ -36,12 +36,12 @@ async def cmd_refresh(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🖨 Записей МФУ: {s['total_mfu']}"
         )
     else:
-        await update.message.reply_text("⚠️ Что-то пошло не так при обновлении.")
+        await update.message.reply_text("⚠️ Что-то пошло не так.")
 
 
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update):
-        await update.message.reply_text("❌ У вас нет доступа к этой команде.")
+        await update.message.reply_text("❌ Нет доступа к этой команде.")
         return
 
     s = get_cache_stats()
@@ -86,7 +86,7 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_logs(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update):
-        await update.message.reply_text("❌ У вас нет доступа к этой команде.")
+        await update.message.reply_text("❌ Нет доступа к этой команде.")
         return
 
     log_copy = get_request_log()
